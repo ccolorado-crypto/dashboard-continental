@@ -54,7 +54,7 @@
     <div class="header">
         <h1 style="color: #C8102E; font-size: 40px; margin: 0;">ARTIMO</h1>
         <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
-        <div class="timestamp">🔄 Última actualización: 10/07/2026 07:28 PM</div>
+        <div class="timestamp">🔄 Última actualización: 10/07/2026 02:31 PM (Hora Colombia)</div>
     </div>
     <div class="dashboard-container">
         <div class="kpi-section">
@@ -168,6 +168,7 @@
 
         function resetFilters() {
             document.querySelectorAll('.data-row').forEach(row => row.style.display = '');
+            document.getElementById('filterBar').style.none = '';
             document.getElementById('filterBar').style.display = 'none';
         }
 
