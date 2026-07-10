@@ -2,14 +2,18 @@ import pandas as pd
 import os
 import glob
 import base64
+from datetime import datetime
 
-print("Iniciando generación del Dashboard Interactivo (12 Canales)...")
+print("Iniciando generación del Dashboard Interactivo Avanzado...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
 carpeta_public = os.path.join(carpeta_actual, 'public')
 
 os.makedirs(carpeta_public, exist_ok=True)
+
+# --- FECHA DE ACTUALIZACIÓN ---
+fecha_actualizacion = datetime.now().strftime("%d/%m/%Y %I:%M %p")
 
 # 1. LOGO
 ruta_logo = glob.glob(os.path.join(carpeta_data, 'logo.*'))
@@ -58,12 +62,20 @@ disco_normal_cnt = int(conteo_discos.get('Normal', 0))
 disco_falla_cnt = int(conteo_discos.get('Falla', 0))
 disco_nodet_cnt = int(conteo_discos.get('No Detectado', 0))
 
-# TRANSMISIÓN
-limite = pd.to_datetime('2026-06-30 23:59:59')
+# TRANSMISIÓN (Nueva regla estricta de 5 días)
+ahora = datetime.now()
 def evaluar_transmision(val):
-    if str(val).strip().lower() == 'en línea': return 'Operando'
-    try: return 'Operando' if pd.to_datetime(val) > limite else 'Falla'
-    except: return 'Falla'
+    val_str = str(val).strip().lower()
+    if val_str == 'en línea': 
+        return 'Operando'
+    try:
+        # Convertir fecha del reporte a objeto datetime para comparar
+        fecha_trans = pd.to_datetime(val)
+        diferencia_dias = (ahora - fecha_trans).days
+        # Si lleva 5 o más días sin transmitir, es Falla
+        return 'Falla' if diferencia_dias >= 5 else 'Operando'
+    except: 
+        return 'Falla'
 
 dashboard_data['Status_Transmision'] = dashboard_data['Última transmisión'].fillna('Falla').apply(evaluar_transmision)
 conteo_transmisiones = dashboard_data['Status_Transmision'].value_counts()
@@ -71,12 +83,12 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# CÁMARAS (Ampliado a 12 Canales según tu solicitud)
+# CÁMARAS (12 Canales)
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
 
-for i in range(1, 13):  # Cambiado de 9 a 13 para leer canales del 1 al 12
+for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
@@ -141,9 +153,14 @@ plantilla_base = f'''
     <style>
         :root {{ --artimo-rojo: #C8102E; --artimo-oscuro: #2D2D2D; --fondo-gris: #F5F7FA; --blanco: #FFFFFF; }}
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--fondo-gris); color: var(--artimo-oscuro); }}
-        .header {{ text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 5px solid var(--artimo-rojo); box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; align-items: center; gap: 12px; }}
+        
+        .header {{ text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 5px solid var(--artimo-rojo); box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; align-items: center; gap: 8px; }}
         .header img {{ max-height: 85px; object-fit: contain; }}
         h1 {{ color: var(--artimo-oscuro); margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }}
+        
+        /* Mensaje de Última Actualización */
+        .timestamp {{ font-size: 14px; color: #718096; background: #EDF2F7; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 5px; }}
+        
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 30px 20px; max-width: 1400px; margin: 0 auto; }}
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 20px; }}
         .kpi-card {{ flex: 1; min-width: 250px; background: var(--blanco); border-radius: 8px; padding: 25px 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid var(--artimo-rojo); }}
@@ -154,9 +171,10 @@ plantilla_base = f'''
         
         .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }}
         .card {{ background-color: var(--blanco); border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 3px solid var(--artimo-rojo); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
-        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 420px; transition: transform 0.2s; }}
+        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 440px; transition: transform 0.2s; }}
         .chart-card:hover {{ transform: translateY(-5px); cursor: pointer; }}
         .chart-container {{ position: relative; width: 100%; height: 280px; flex-grow: 1; }}
+        
         .chart-info-text {{ font-size: 12px; color: #555555; background-color: #F9F9F9; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--artimo-rojo); line-height: 1.5; }}
         
         .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); box-sizing: border-box; border-left: 4px solid #3498DB; }}
@@ -181,6 +199,7 @@ plantilla_base = f'''
     <div class="header">
         {html_logo}
         <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
+        <div class="timestamp">🔄 Última actualización: {fecha_actualizacion}</div>
     </div>
     <div class="dashboard-container">
         <div class="kpi-section">
@@ -192,11 +211,11 @@ plantilla_base = f'''
         <div class="charts-section">
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaTransmision"></canvas></div>
-                <div class="chart-info-text">💡 Filtra la tabla por estado de transmisión.</div>
+                <div class="chart-info-text">🟩 <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🟥 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
-                <div class="chart-info-text">💡 Filtra la tabla por estado de disco.</div>
+                <div class="chart-info-text">💡 Filtra la tabla por estado de disco duro.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaCamaras"></canvas></div>
@@ -258,18 +277,18 @@ plantilla_base = f'''
         new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ 
             type: 'doughnut', 
             data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Transmisión') }}, onClick: onChartClick('trans') }} 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Estado de Transmisión') }}, onClick: onChartClick('trans') }} 
         }});
         
         new Chart(document.getElementById('graficaDisco').getContext('2d'), {{ 
             type: 'doughnut', 
             data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Discos') }}, onClick: onChartClick('disk') }} 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Estado del Disco Duro') }}, onClick: onChartClick('disk') }} 
         }});
         
         new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ 
             type: 'pie', 
-            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
+            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
             options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
         }});
     </script>
@@ -281,4 +300,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard generado exitosamente con 12 canales!")
+print(f"¡Dashboard generado exitosamente!")
