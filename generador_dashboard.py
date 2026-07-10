@@ -3,7 +3,7 @@ import os
 import glob
 import base64
 
-print("Iniciando generación del Dashboard Interactivo...")
+print("Iniciando generación del Dashboard Interactivo (12 Canales)...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
@@ -43,7 +43,7 @@ dashboard_data = df[columnas_base].copy()
 dashboard_data.columns = ['Máquina', 'Última transmisión', 'Estado del Disco 1']
 total_maquinas = len(dashboard_data)
 
-# --- PROCESAMIENTO ESTRICTO ---
+# --- PROCESAMIENTO ---
 
 # DISCOS
 def mapear_estado_disco(estado):
@@ -71,12 +71,12 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# CÁMARAS (Nueva Lógica)
+# CÁMARAS (Ampliado a 12 Canales según tu solicitud)
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
 
-for i in range(1, 9):
+for i in range(1, 13):  # Cambiado de 9 a 13 para leer canales del 1 al 12
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
@@ -86,11 +86,8 @@ for i in range(1, 9):
         def evaluar_camara(row, h=col_hab, e=col_est):
             hab = str(row.get(h, '')).strip().lower()
             est = str(row.get(e, '')).strip().lower()
-            
             if hab == 'abrir':
-                # Si está abierta pero su estado es 'perdida' o diferente a normal, es Falla
                 return 'Normal' if est == 'normal' else 'Falla'
-            # Si está cerrado o vacío, la ignoramos
             return 'N/A'
             
         dashboard_data[cam_name] = df.apply(evaluar_camara, axis=1)
@@ -99,9 +96,7 @@ for i in range(1, 9):
 
 alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
-# --- CONSTRUCCIÓN DE LA TABLA HTML CON ATRIBUTOS PARA FILTROS ---
-display_data = dashboard_data.copy()
-
+# --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_disk_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">Normal</span>'
     if st == 'Falla': return '<span class="disk-status Falla">Falla</span>'
@@ -110,7 +105,7 @@ def style_disk_status(st):
 def style_cam_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">✓ OK</span>'
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
-    return '<span style="color: #E2E8F0; font-weight: bold;">-</span>'
+    return '<span style="color: #CBD5E1; font-weight: bold;">-</span>'
 
 columnas_mostrar = ['Máquina', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
 
@@ -122,7 +117,6 @@ html_table += '</tr>\n</thead>\n<tbody>\n'
 for idx, row in dashboard_data.iterrows():
     t_stat = row['Status_Transmision']
     d_stat = row['Status_Disco']
-    # Si la máquina tiene al menos UNA cámara en falla, se clasifica como Falla en el filtro global de cámaras
     c_stat = 'Falla' if any(row[c[2]] == 'Falla' for c in camaras_encontradas) else 'Normal'
     
     html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}">'
@@ -135,7 +129,6 @@ for idx, row in dashboard_data.iterrows():
         
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
-
 
 # 3. PLANTILLA HTML Y JAVASCRIPT
 plantilla_base = f'''
@@ -166,7 +159,6 @@ plantilla_base = f'''
         .chart-container {{ position: relative; width: 100%; height: 280px; flex-grow: 1; }}
         .chart-info-text {{ font-size: 12px; color: #555555; background-color: #F9F9F9; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--artimo-rojo); line-height: 1.5; }}
         
-        /* Controles de Filtro */
         .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); box-sizing: border-box; border-left: 4px solid #3498DB; }}
         .filter-msg {{ font-weight: bold; color: #3498DB; font-size: 14px; }}
         .btn-reset {{ background: var(--artimo-oscuro); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase; }}
@@ -176,7 +168,6 @@ plantilla_base = f'''
         table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; }}
         th, td {{ padding: 12px 15px; text-align: center; border-bottom: 1px solid #EAEAEA; }}
         th {{ background-color: var(--artimo-rojo); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 12px; }}
-        tr:hover {{ background-color: #FDFDFD; }}
         
         .disk-status {{ padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }}
         .disk-status.Normal {{ background-color: #E8F8F5; color: #117A65; border: 1px solid #A3E4D7; }}
@@ -201,21 +192,21 @@ plantilla_base = f'''
         <div class="charts-section">
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaTransmision"></canvas></div>
-                <div class="chart-info-text">💡 <strong>Clickea en la gráfica</strong> para filtrar la tabla por transmisión.</div>
+                <div class="chart-info-text">💡 Filtra la tabla por estado de transmisión.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
-                <div class="chart-info-text">💡 <strong>Clickea en la gráfica</strong> para filtrar la tabla por estado de disco.</div>
+                <div class="chart-info-text">💡 Filtra la tabla por estado de disco.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaCamaras"></canvas></div>
-                <div class="chart-info-text">💡 <strong>Clickea en la gráfica</strong> para ver equipos con cámaras Dañadas o 100% OK.</div>
+                <div class="chart-info-text">💡 Filtra por equipos con cámaras Dañadas u OK.</div>
             </div>
         </div>
         
         <div class="filter-bar" id="filterBar" style="display: none;">
             <div class="filter-msg" id="filterMessage">Mostrando resultados filtrados</div>
-            <button class="btn-reset" onclick="resetFilters()">Mostrar Todas las Máquinas</button>
+            <button class="btn-reset" onclick="resetFilters()">Mostrar Todos</button>
         </div>
         
         <div class="card table-card">
@@ -225,11 +216,9 @@ plantilla_base = f'''
     </div>
     
     <script>
-        // LÓGICA DE FILTRADO
         function filterTable(category, value, labelName) {{
             const rows = document.querySelectorAll('.data-row');
             let count = 0;
-            
             rows.forEach(row => {{
                 let rowValue = '';
                 if (category === 'trans') rowValue = row.getAttribute('data-trans');
@@ -243,53 +232,45 @@ plantilla_base = f'''
                     row.style.display = 'none';
                 }}
             }});
-            
             document.getElementById('filterBar').style.display = 'flex';
-            document.getElementById('filterMessage').innerText = `🔎 Filtrado por: ${{labelName}} (${{count}} equipos encontrados)`;
-            
-            // Scroll suave hacia la tabla
+            document.getElementById('filterMessage').innerText = `🔎 Filtrado por: ${{labelName}} (${{count}} equipos)`;
             document.getElementById('filterBar').scrollIntoView({{ behavior: 'smooth', block: 'center' }});
         }}
 
         function resetFilters() {{
-            const rows = document.querySelectorAll('.data-row');
-            rows.forEach(row => row.style.display = '');
+            document.querySelectorAll('.data-row').forEach(row => row.style.display = '');
             document.getElementById('filterBar').style.display = 'none';
         }}
 
-        // CONFIGURACIÓN DE GRÁFICAS
         const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 16, weight: 'bold' }}, color: '#2D2D2D', padding: {{bottom: 10}} }});
         
-        // Función general para clics
         const onChartClick = (category) => (evt, elements, chart) => {{
             if (elements.length === 0) return;
             const index = elements[0].index;
             const labelFull = chart.data.labels[index];
-            
             let value = '';
             if (category === 'trans') value = labelFull.includes('Operando') ? 'Operando' : 'Falla';
             if (category === 'disk') value = labelFull.includes('Normal') ? 'Normal' : (labelFull.includes('Falla') ? 'Falla' : 'No Detectado');
             if (category === 'cam') value = labelFull.includes('OK') ? 'Normal' : 'Falla';
-            
             filterTable(category, value, labelFull);
         }};
 
         new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2, hoverOffset: 10 }}] }}, 
+            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
             options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Transmisión') }}, onClick: onChartClick('trans') }} 
         }});
         
         new Chart(document.getElementById('graficaDisco').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2, hoverOffset: 10 }}] }}, 
+            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2 }}] }}, 
             options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Discos') }}, onClick: onChartClick('disk') }} 
         }});
         
         new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ 
             type: 'pie', 
-            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2, hoverOffset: 10 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Cámaras (Por Máquina)') }}, onClick: onChartClick('cam') }} 
+            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
         }});
     </script>
 </body>
@@ -300,4 +281,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard generado exitosamente en {ruta_guardado}!")
+print(f"¡Dashboard generado exitosamente con 12 canales!")
