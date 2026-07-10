@@ -2,9 +2,10 @@ import pandas as pd
 import os
 import glob
 import base64
+import json
 from datetime import datetime, timedelta
 
-print("Iniciando generación del Dashboard Corporativo ÁRTIMO...")
+print("Iniciando generación del Dashboard Corporativo ÁRTIMO Completo...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
@@ -18,7 +19,6 @@ fecha_colombia = fecha_servidor - timedelta(hours=5)
 fecha_actualizacion = fecha_colombia.strftime("%d/%m/%Y %I:%M %p")
 
 # 1. LOGO OFICIAL DE ÁRTIMO (logoartimogrande.jpg)
-# Buscamos primero 'logoartimogrande.jpg' en la carpeta 'data'
 ruta_logo_oficial = os.path.join(carpeta_data, 'logoartimogrande.jpg')
 logo_base64_src = ""
 
@@ -27,7 +27,6 @@ if os.path.exists(ruta_logo_oficial):
         encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
         logo_base64_src = f"data:image/jpeg;base64,{encoded_string}"
 else:
-    # Si no existe, buscamos cualquier archivo que empiece con logo
     ruta_logo_alternativo = glob.glob(os.path.join(carpeta_data, 'logo.*'))
     if ruta_logo_alternativo:
         with open(ruta_logo_alternativo[0], "rb") as image_file:
@@ -139,6 +138,10 @@ dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
 # ORDENAR LA TABLA DE MAYOR A MENOR SEGÚN DÍAS OFFLINE
 dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
+# --- DATA CRUDA EN FORMATO JSON PARA JS DOWNLOAD ---
+raw_export_data = dashboard_data.to_dict(orient='records')
+json_raw_data = json.dumps(raw_export_data, default=str)
+
 # --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_gravedad(grav):
     if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
@@ -180,7 +183,7 @@ for idx, row in dashboard_data.iterrows():
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
 
-# 3. PLANTILLA HTML CON IDENTIDAD CORPORATIVA ÁRTIMO
+# 3. PLANTILLA HTML CON IDENTIDAD CORPORATIVA Y BOTONES DE DESCARGA
 plantilla_base = f'''
 <!DOCTYPE html>
 <html lang="es">
@@ -218,7 +221,27 @@ plantilla_base = f'''
         .brand-logo {{ max-height: 36px; object-fit: contain; }}
         .navbar-title {{ font-size: 14px; font-weight: 700; color: var(--artimo-dark); letter-spacing: 0.5px; text-transform: uppercase; }}
         
-        .timestamp {{ font-size: 11px; color: var(--artimo-grey); background: var(--artimo-light); padding: 4px 12px; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
+        /* PANEL DE CONTROLES Y DESCARGAS */
+        .navbar-actions {{ display: flex; align-items: center; gap: 10px; }}
+        .btn-download {{ 
+            background-color: var(--blanco);
+            color: var(--artimo-dark);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }}
+        .btn-download:hover {{ background-color: var(--artimo-light); border-color: var(--artimo-grey); }}
+        .btn-download.primary {{ background-color: var(--artimo-red); color: var(--blanco); border-color: var(--artimo-red); }}
+        .btn-download.primary:hover {{ background-color: #A50D24; }}
+        
+        .timestamp {{ font-size: 11px; color: var(--artimo-grey); background: var(--artimo-light); padding: 6px 12px; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
         
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto; }}
         
@@ -263,6 +286,19 @@ plantilla_base = f'''
         
         .footer-firma {{ text-align: center; padding: 30px 20px; margin-top: 20px; color: var(--artimo-grey); font-size: 12px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); font-weight: 300; }}
         .footer-firma span {{ font-size: 13px; font-weight: 700; color: var(--artimo-dark); }}
+
+        /* ESTILOS EXCLUSIVOS PARA IMPRESIÓN (PDF) */
+        @media print {{
+            body {{ background-color: #ffffff; color: #000000; font-size: 10px; }}
+            .top-navbar, .navbar-actions, .filter-bar, .chart-info-text, .footer-firma {{ display: none !important; }}
+            .dashboard-container {{ padding: 0; gap: 15px; }}
+            .kpi-card, .card {{ box-shadow: none !important; border: 1px solid #ccc !important; page-break-inside: avoid; }}
+            .chart-card {{ max-width: 31% !important; min-height: auto !important; height: 300px !important; }}
+            .table-card {{ border: none !important; margin-top: 15px; }}
+            table.tabla-maquinas {{ font-size: 10px !important; width: 100% !important; }}
+            th {{ background-color: #333 !important; color: #fff !important; }}
+            td, th {{ padding: 6px 8px !important; }}
+        }}
     </style>
 </head>
 <body>
@@ -271,7 +307,15 @@ plantilla_base = f'''
             {html_logo}
             <div class="navbar-title">Diagnóstico Continental Gold</div>
         </div>
-        <div class="timestamp">🔄 Actualizado: {fecha_actualizacion}</div>
+        <div class="navbar-actions">
+            <span class="timestamp">🔄 {fecha_actualizacion}</span>
+            <button class="btn-download" onclick="exportCSV()">
+                📥 Data Cruda (.csv)
+            </button>
+            <button class="btn-download primary" onclick="exportPDF()">
+                📄 Exportar PDF
+            </button>
+        </div>
     </div>
     
     <div class="dashboard-container">
@@ -309,6 +353,40 @@ plantilla_base = f'''
     </div>
     
     <script>
+        // Inyectamos la data cruda directamente en formato JSON
+        const rawJsonData = {json_raw_data};
+
+        function exportCSV() {{
+            if (!rawJsonData || rawJsonData.length === 0) return;
+            
+            // Extraer cabeceras del JSON
+            const headers = Object.keys(rawJsonData[0]);
+            const csvRows = [headers.join(',')];
+            
+            for (const row of rawJsonData) {{
+                const values = headers.map(header => {{
+                    const val = row[header];
+                    // Escapar strings que contengan comas
+                    const valEscaped = ('' + (val !== null ? val : '')).replace(/"/g, '\\"');
+                    return `"${{valEscaped}}"`;
+                }});
+                csvRows.push(values.join(','));
+            }}
+            
+            const csvContent = "data:text/csv;charset=utf-8,\\uFEFF" + csvRows.join('\\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Data_Cruda_Artimo_${{new Date().toISOString().split('T')[0]}}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }}
+
+        function exportPDF() {{
+            window.print();
+        }}
+
         function filterTable(category, value, labelName) {{
             const rows = document.querySelectorAll('.data-row');
             let count = 0;
@@ -374,4 +452,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard con la identidad de ÁRTIMO generado exitosamente!")
+print(f"¡Dashboard analítico definitivo generado con éxito!")
