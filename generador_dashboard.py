@@ -4,7 +4,7 @@ import glob
 import base64
 from datetime import datetime, timedelta
 
-print("Iniciando generación del Dashboard Operativo Crítico...")
+print("Iniciando generación del Dashboard Operativo Profesional...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
@@ -26,7 +26,7 @@ if ruta_logo:
         mime_type = "image/png" if ruta_logo[0].lower().endswith('png') else "image/jpeg"
         logo_base64_src = f"data:{mime_type};base64,{encoded_string}"
 
-html_logo = f'<img src="{logo_base64_src}" alt="Logo">' if logo_base64_src else '<h1 style="color: #C8102E; font-size: 40px; margin: 0;">ARTIMO</h1>'
+html_logo = f'<img src="{logo_base64_src}" alt="Logo">' if logo_base64_src else '<h1 style="color: #1E3A8A; font-size: 36px; margin: 0; font-weight: 800; letter-spacing: 2px;">LAP TECHNOLOGIES.</h1>'
 
 # 2. LECTURA DE DATOS
 archivos_datos = glob.glob(os.path.join(carpeta_data, '*.xlsx')) + glob.glob(os.path.join(carpeta_data, '*.csv'))
@@ -132,9 +132,9 @@ dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
 # --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_gravedad(grav):
-    if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
-    if 'Advertencia' in grav: return '<b style="color: #D4AC0D;">🟡 Advertencia</b>'
-    return '<b style="color: #2ECC71;">🟢 Excelente</b>'
+    if 'Crítico' in grav: return '<b style="color: #EF4444;">🔴 Crítico</b>'
+    if 'Advertencia' in grav: return '<b style="color: #F59E0B;">🟡 Advertencia</b>'
+    return '<b style="color: #10B981;">🟢 Excelente</b>'
 
 def style_disk_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">Normal</span>'
@@ -144,7 +144,7 @@ def style_disk_status(st):
 def style_cam_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">✓ OK</span>'
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
-    return '<span style="color: #CBD5E1; font-weight: bold;">-</span>'
+    return '<span style="color: #94A3B8; font-weight: bold;">-</span>'
 
 columnas_mostrar = ['Gravedad', 'Máquina', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
 
@@ -161,7 +161,7 @@ for idx, row in dashboard_data.iterrows():
     html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}">'
     html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
-    html_table += f'<td style="font-weight: bold; background-color: {"#FDEDEC" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
+    html_table += f'<td style="font-weight: 700; background-color: {"#FEF2F2" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
     
@@ -180,48 +180,57 @@ plantilla_base = f'''
     <title>DIAGNOSTICO CONTINENTAL GOLD</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {{ --artimo-rojo: #C8102E; --artimo-oscuro: #2D2D2D; --fondo-gris: #F5F7FA; --blanco: #FFFFFF; }}
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--fondo-gris); color: var(--artimo-oscuro); }}
+        :root {{ 
+            --navy-primary: #1E3A8A; 
+            --navy-light: #3B82F6;
+            --slate-dark: #334155; 
+            --fondo-gris: #F8FAFC; 
+            --blanco: #FFFFFF; 
+            --border-color: #E2E8F0;
+        }}
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--fondo-gris); color: var(--slate-dark); }}
         
-        .header {{ text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 5px solid var(--artimo-rojo); box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; align-items: center; gap: 8px; }}
+        .header {{ text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 4px solid var(--navy-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.03); display: flex; flex-direction: column; align-items: center; gap: 8px; }}
         .header img {{ max-height: 85px; object-fit: contain; }}
-        h1 {{ color: var(--artimo-oscuro); margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }}
+        h1 {{ color: var(--slate-dark); margin: 0; font-size: 26px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }}
         
-        .timestamp {{ font-size: 14px; color: #718096; background: #EDF2F7; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 5px; }}
+        .timestamp {{ font-size: 13px; color: #64748B; background: #F1F5F9; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 5px; }}
         
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 30px 20px; max-width: 1400px; margin: 0 auto; }}
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 20px; }}
-        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 8px; padding: 25px 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid var(--artimo-rojo); }}
-        .kpi-card h3 {{ margin: 0 0 10px 0; color: #777; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
-        .kpi-card .number {{ margin: 0; font-size: 42px; font-weight: 800; color: var(--artimo-oscuro); }}
-        .kpi-card.success {{ border-left-color: #2ECC71; }}
-        .kpi-card.danger {{ border-left-color: var(--artimo-rojo); }}
-        .kpi-card.warning {{ border-left-color: #E67E22; }}
+        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 8px; padding: 22px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border-color); border-top: 4px solid var(--navy-primary); }}
+        .kpi-card h3 {{ margin: 0 0 10px 0; color: #64748B; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }}
+        .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--slate-dark); }}
+        .kpi-card.success {{ border-top-color: #10B981; }}
+        .kpi-card.danger {{ border-top-color: #EF4444; }}
+        .kpi-card.warning {{ border-top-color: #F59E0B; }}
         
         .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }}
-        .card {{ background-color: var(--blanco); border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 3px solid var(--artimo-rojo); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
-        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 440px; transition: transform 0.2s; }}
-        .chart-card:hover {{ transform: translateY(-5px); cursor: pointer; }}
+        .card {{ background-color: var(--blanco); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border-color); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
+        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 440px; transition: transform 0.15s ease; }}
+        .chart-card:hover {{ transform: translateY(-3px); cursor: pointer; border-color: var(--navy-light); }}
         .chart-container {{ position: relative; width: 100%; height: 280px; flex-grow: 1; }}
         
-        .chart-info-text {{ font-size: 12px; color: #555555; background-color: #F9F9F9; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--artimo-rojo); line-height: 1.5; }}
+        .chart-info-text {{ font-size: 12px; color: #475569; background-color: #F8FAFC; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--navy-primary); line-height: 1.6; }}
         
-        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); box-sizing: border-box; border-left: 4px solid #3498DB; }}
-        .filter-msg {{ font-weight: bold; color: #3498DB; font-size: 14px; }}
-        .btn-reset {{ background: var(--artimo-oscuro); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; text-transform: uppercase; }}
-        .btn-reset:hover {{ background: var(--artimo-rojo); }}
+        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 8px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid #3B82F6; }}
+        .filter-msg {{ font-weight: 600; color: #1D4ED8; font-size: 14px; }}
+        .btn-reset {{ background: var(--slate-dark); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; }}
+        .btn-reset:hover {{ background: var(--navy-primary); }}
         
-        .table-card {{ width: 100%; padding: 0; overflow-x: auto; }}
-        table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; }}
-        th, td {{ padding: 12px 15px; text-align: center; border-bottom: 1px solid #EAEAEA; }}
-        th {{ background-color: var(--artimo-rojo); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 12px; }}
+        .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); }}
+        table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 14px; }}
+        th, td {{ padding: 12px 14px; text-align: center; border-bottom: 1px solid var(--border-color); }}
+        th {{ background-color: #1E293B; color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }}
+        tr.data-row:hover {{ background-color: #F1F5F9; }}
         
-        .disk-status {{ padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }}
-        .disk-status.Normal {{ background-color: #E8F8F5; color: #117A65; border: 1px solid #A3E4D7; }}
-        .disk-status.Falla {{ background-color: #FDEDEC; color: #C0392B; border: 1px solid #F5B7B1; }}
-        .disk-status.SinDisco {{ background-color: #F2F4F4; color: #7B7D7D; border: 1px solid #D5D8DC; }}
-        .footer-firma {{ text-align: center; padding: 40px 20px; margin-top: 20px; color: #7f8c8d; font-size: 15px; letter-spacing: 1px; border-top: 1px solid #EAEAEA; }}
-        .footer-firma span {{ font-family: 'Georgia', serif; font-size: 18px; font-weight: bold; font-style: italic; color: var(--artimo-rojo); }}
+        .disk-status {{ padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }}
+        .disk-status.Normal {{ background-color: #D1FAE5; color: #065F46; }}
+        .disk-status.Falla {{ background-color: #FEE2E2; color: #991B1B; }}
+        .disk-status.SinDisco {{ background-color: #F1F5F9; color: #475569; }}
+        
+        .footer-firma {{ text-align: center; padding: 40px 20px; margin-top: 20px; color: #94A3B8; font-size: 14px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); }}
+        .footer-firma span {{ font-size: 15px; font-weight: 700; color: var(--navy-primary); }}
     </style>
 </head>
 <body>
@@ -233,15 +242,15 @@ plantilla_base = f'''
     <div class="dashboard-container">
         <div class="kpi-section">
             <div class="kpi-card"><h3>Total de Máquinas</h3><p class="number">{total_maquinas}</p></div>
-            <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #2ECC71;">{operando_cnt}</p></div>
-            <div class="kpi-card warning"><h3>Offline >15 Días (Crítico)</h3><p class="number" style="color: #E67E22;">{equipos_criticos_antiguedad}</p></div>
-            <div class="kpi-card danger"><h3>Alertas Hardware</h3><p class="number" style="color: #C8102E;">{alertas_hardware}</p></div>
+            <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #10B981;">{operando_cnt}</p></div>
+            <div class="kpi-card warning"><h3>Offline >15 Días (Crítico)</h3><p class="number" style="color: #F59E0B;">{equipos_criticos_antiguedad}</p></div>
+            <div class="kpi-card danger"><h3>Alertas Hardware</h3><p class="number" style="color: #EF4444;">{alertas_hardware}</p></div>
         </div>
         
         <div class="charts-section">
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaTransmision"></canvas></div>
-                <div class="chart-info-text">🟩 <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🟥 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
+                <div class="chart-info-text">🔵 <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🔴 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
@@ -288,11 +297,10 @@ plantilla_base = f'''
 
         function resetFilters() {{
             document.querySelectorAll('.data-row').forEach(row => row.style.display = '');
-            document.getElementById('filterBar').style.none = '';
             document.getElementById('filterBar').style.display = 'none';
         }}
 
-        const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 16, weight: 'bold' }}, color: '#2D2D2D', padding: {{bottom: 10}} }});
+        const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 15, weight: '600', family: 'Segoe UI' }}, color: '#334155', padding: {{bottom: 12}} }});
         
         const onChartClick = (category) => (evt, elements, chart) => {{
             if (elements.length === 0) return;
@@ -307,20 +315,20 @@ plantilla_base = f'''
 
         new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Estado de Transmisión') }}, onClick: onChartClick('trans') }} 
+            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#3B82F6', '#EF4444'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Estado de Transmisión') }}, onClick: onChartClick('trans') }} 
         }});
         
         new Chart(document.getElementById('graficaDisco').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Estado del Disco Duro') }}, onClick: onChartClick('disk') }} 
+            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#10B981', '#EF4444', '#64748B'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Estado del Disco Duro') }}, onClick: onChartClick('disk') }} 
         }});
         
         new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ 
             type: 'pie', 
-            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
+            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#10B981', '#F59E0B'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
         }});
     </script>
 </body>
