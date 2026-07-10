@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import glob
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 
 print("Iniciando generación del Dashboard Operativo Crítico...")
 
@@ -12,8 +12,10 @@ carpeta_public = os.path.join(carpeta_actual, 'public')
 
 os.makedirs(carpeta_public, exist_ok=True)
 
-# --- FECHA DE ACTUALIZACIÓN ---
-fecha_actualizacion = datetime.now().strftime("%d/%m/%Y %I:%M %p")
+# --- FECHA DE ACTUALIZACIÓN (AJUSTADA A HORA COLOMBIA UTC-5) ---
+fecha_servidor = datetime.now()
+fecha_colombia = fecha_servidor - timedelta(hours=5)
+fecha_actualizacion = fecha_colombia.strftime("%d/%m/%Y %I:%M %p")
 
 # 1. LOGO
 ruta_logo = glob.glob(os.path.join(carpeta_data, 'logo.*'))
@@ -60,7 +62,7 @@ def calcular_dias_offline(val):
         diff = (ahora - fecha_trans).days
         return max(0, diff)
     except:
-        return 30 # Valor preventivo si el formato de fecha se rompe
+        return 30
 
 dashboard_data['Días Offline'] = dashboard_data['Última transmisión'].fillna('En línea').apply(calcular_dias_offline)
 
@@ -87,7 +89,7 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# Canales de Cámaras
+# Canales de Cámaras (12 Canales)
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
@@ -114,11 +116,9 @@ alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
 # --- CALCULAR INDICADOR DE GRAVEDAD POR VEHÍCULO ---
 def evaluar_gravedad(row):
-    # Regla Crítico: Sin transmisión (>=5 días) O problema de disco duro (Falla/No detectado)
     if row['Status_Transmision'] == 'Falla' or row['Status_Disco'] in ['Falla', 'No Detectado']:
         return '🔴 Crítico'
     
-    # Verificar si tiene alguna cámara en Falla
     tiene_camaras_danadas = any(row[c[2]] == 'Falla' for c in camaras_encontradas)
     if tiene_camaras_danadas:
         return '🟡 Advertencia'
@@ -130,7 +130,7 @@ dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
 # ORDENAR LA TABLA DE MAYOR A MENOR SEGÚN DÍAS OFFLINE
 dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
-# --- CONSTRUCCIÓN DE LA TABLA HTML ENRIQUECIDA ---
+# --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_gravedad(grav):
     if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
     if 'Advertencia' in grav: return '<b style="color: #D4AC0D;">🟡 Advertencia</b>'
@@ -228,7 +228,7 @@ plantilla_base = f'''
     <div class="header">
         {html_logo}
         <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
-        <div class="timestamp">🔄 Última actualización: {fecha_actualizacion}</div>
+        <div class="timestamp">🔄 Última actualización: {fecha_actualizacion} (Hora Colombia)</div>
     </div>
     <div class="dashboard-container">
         <div class="kpi-section">
@@ -288,6 +288,7 @@ plantilla_base = f'''
 
         function resetFilters() {{
             document.querySelectorAll('.data-row').forEach(row => row.style.display = '');
+            document.getElementById('filterBar').style.none = '';
             document.getElementById('filterBar').style.display = 'none';
         }}
 
