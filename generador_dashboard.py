@@ -4,7 +4,7 @@ import glob
 import base64
 from datetime import datetime, timedelta
 
-print("Iniciando generación del Dashboard Operativo Profesional...")
+print("Iniciando generación del Dashboard Corporativo ÁRTIMO...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
@@ -17,16 +17,25 @@ fecha_servidor = datetime.now()
 fecha_colombia = fecha_servidor - timedelta(hours=5)
 fecha_actualizacion = fecha_colombia.strftime("%d/%m/%Y %I:%M %p")
 
-# 1. LOGO
-ruta_logo = glob.glob(os.path.join(carpeta_data, 'logo.*'))
+# 1. LOGO OFICIAL DE ÁRTIMO (logoartimogrande.jpg)
+# Buscamos primero 'logoartimogrande.jpg' en la carpeta 'data'
+ruta_logo_oficial = os.path.join(carpeta_data, 'logoartimogrande.jpg')
 logo_base64_src = ""
-if ruta_logo:
-    with open(ruta_logo[0], "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-        mime_type = "image/png" if ruta_logo[0].lower().endswith('png') else "image/jpeg"
-        logo_base64_src = f"data:{mime_type};base64,{encoded_string}"
 
-html_logo = f'<img src="{logo_base64_src}" alt="Logo">' if logo_base64_src else '<h1 style="color: #1E3A8A; font-size: 36px; margin: 0; font-weight: 800; letter-spacing: 2px;">LAP TECHNOLOGIES.</h1>'
+if os.path.exists(ruta_logo_oficial):
+    with open(ruta_logo_oficial, "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+        logo_base64_src = f"data:image/jpeg;base64,{encoded_string}"
+else:
+    # Si no existe, buscamos cualquier archivo que empiece con logo
+    ruta_logo_alternativo = glob.glob(os.path.join(carpeta_data, 'logo.*'))
+    if ruta_logo_alternativo:
+        with open(ruta_logo_alternativo[0], "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            mime_type = "image/png" if ruta_logo_alternativo[0].lower().endswith('png') else "image/jpeg"
+            logo_base64_src = f"data:{mime_type};base64,{encoded_string}"
+
+html_logo = f'<img src="{logo_base64_src}" alt="ÁRTIMO" class="brand-logo">' if logo_base64_src else '<h1 style="color: #C8102E; font-size: 28px; margin: 0; font-weight: 800; letter-spacing: 2px;">ÁRTIMO</h1>'
 
 # 2. LECTURA DE DATOS
 archivos_datos = glob.glob(os.path.join(carpeta_data, '*.xlsx')) + glob.glob(os.path.join(carpeta_data, '*.csv'))
@@ -132,9 +141,9 @@ dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
 # --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_gravedad(grav):
-    if 'Crítico' in grav: return '<b style="color: #EF4444;">🔴 Crítico</b>'
-    if 'Advertencia' in grav: return '<b style="color: #F59E0B;">🟡 Advertencia</b>'
-    return '<b style="color: #10B981;">🟢 Excelente</b>'
+    if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
+    if 'Advertencia' in grav: return '<b style="color: #E9C46A;">🟡 Advertencia</b>'
+    return '<b style="color: #2A9D8F;">🟢 Excelente</b>'
 
 def style_disk_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">Normal</span>'
@@ -144,7 +153,7 @@ def style_disk_status(st):
 def style_cam_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">✓ OK</span>'
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
-    return '<span style="color: #94A3B8; font-weight: bold;">-</span>'
+    return '<span style="color: #5A5A59; font-weight: bold;">-</span>'
 
 columnas_mostrar = ['Gravedad', 'Máquina', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
 
@@ -161,7 +170,7 @@ for idx, row in dashboard_data.iterrows():
     html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}">'
     html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
-    html_table += f'<td style="font-weight: 700; background-color: {"#FEF2F2" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
+    html_table += f'<td style="font-weight: 700; background-color: {"#FFF5F5" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
     
@@ -171,86 +180,112 @@ for idx, row in dashboard_data.iterrows():
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
 
-# 3. PLANTILLA HTML Y JAVASCRIPT
+# 3. PLANTILLA HTML CON IDENTIDAD CORPORATIVA ÁRTIMO
 plantilla_base = f'''
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>DIAGNOSTICO CONTINENTAL GOLD</title>
+    <title>ÁRTIMO | DIAGNÓSTICO CONTINENTAL GOLD</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{ 
-            --navy-primary: #1E3A8A; 
-            --navy-light: #3B82F6;
-            --slate-dark: #334155; 
-            --fondo-gris: #F8FAFC; 
+            --artimo-red: #C8102E; 
+            --artimo-dark: #333333; 
+            --artimo-grey: #5A5A59; 
+            --artimo-light: #F4F4F4;
             --blanco: #FFFFFF; 
-            --border-color: #E2E8F0;
+            --border-color: #E5E7EB;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }}
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--fondo-gris); color: var(--slate-dark); }}
+        body {{ font-family: var(--font-family); margin: 0; padding: 0; background-color: var(--artimo-light); color: var(--artimo-dark); }}
         
-        .header {{ text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 4px solid var(--navy-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.03); display: flex; flex-direction: column; align-items: center; gap: 8px; }}
-        .header img {{ max-height: 85px; object-fit: contain; }}
-        h1 {{ color: var(--slate-dark); margin: 0; font-size: 26px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }}
+        /* BARRA SUPERIOR FIJA 56PX */
+        .top-navbar {{ 
+            height: 56px; 
+            background-color: var(--blanco); 
+            border-bottom: 1px solid var(--border-color); 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }}
+        .brand-container {{ display: flex; align-items: center; gap: 12px; }}
+        .brand-logo {{ max-height: 36px; object-fit: contain; }}
+        .navbar-title {{ font-size: 14px; font-weight: 700; color: var(--artimo-dark); letter-spacing: 0.5px; text-transform: uppercase; }}
         
-        .timestamp {{ font-size: 13px; color: #64748B; background: #F1F5F9; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 5px; }}
+        .timestamp {{ font-size: 11px; color: var(--artimo-grey); background: var(--artimo-light); padding: 4px 12px; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
         
-        .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 30px 20px; max-width: 1400px; margin: 0 auto; }}
-        .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 20px; }}
-        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 8px; padding: 22px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border-color); border-top: 4px solid var(--navy-primary); }}
-        .kpi-card h3 {{ margin: 0 0 10px 0; color: #64748B; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }}
-        .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--slate-dark); }}
-        .kpi-card.success {{ border-top-color: #10B981; }}
-        .kpi-card.danger {{ border-top-color: #EF4444; }}
-        .kpi-card.warning {{ border-top-color: #F59E0B; }}
+        .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto; }}
         
-        .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }}
-        .card {{ background-color: var(--blanco); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border-color); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
-        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 440px; transition: transform 0.15s ease; }}
-        .chart-card:hover {{ transform: translateY(-3px); cursor: pointer; border-color: var(--navy-light); }}
-        .chart-container {{ position: relative; width: 100%; height: 280px; flex-grow: 1; }}
+        .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 16px; }}
+        .kpi-card {{ 
+            flex: 1; 
+            min-width: 220px; 
+            background: var(--blanco); 
+            border-radius: 12px; 
+            padding: 20px; 
+            text-align: center; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
+            border: 1px solid var(--border-color); 
+        }}
+        .kpi-card h3 {{ margin: 0 0 8px 0; color: var(--artimo-grey); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }}
+        .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--artimo-dark); }}
+        .kpi-card.highlight {{ border-top: 4px solid var(--artimo-red); }}
         
-        .chart-info-text {{ font-size: 12px; color: #475569; background-color: #F8FAFC; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--navy-primary); line-height: 1.6; }}
+        .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; width: 100%; }}
+        .card {{ background-color: var(--blanco); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border-color); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
+        .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 430px; transition: transform 0.15s ease; }}
+        .chart-card:hover {{ transform: translateY(-3px); cursor: pointer; border-color: var(--artimo-grey); }}
+        .chart-container {{ position: relative; width: 100%; height: 260px; flex-grow: 1; }}
         
-        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 8px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid #3B82F6; }}
-        .filter-msg {{ font-weight: 600; color: #1D4ED8; font-size: 14px; }}
-        .btn-reset {{ background: var(--slate-dark); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; text-transform: uppercase; }}
-        .btn-reset:hover {{ background: var(--navy-primary); }}
+        .chart-info-text {{ font-size: 11px; color: var(--artimo-grey); background-color: var(--artimo-light); padding: 10px; margin-top: 12px; border-radius: 8px; border-left: 3px solid var(--artimo-red); line-height: 1.5; }}
         
-        .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); }}
-        table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 14px; }}
+        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-red); }}
+        .filter-msg {{ font-weight: 600; color: var(--artimo-dark); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .btn-reset {{ background: var(--artimo-dark); color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .btn-reset:hover {{ background: var(--artimo-red); }}
+        
+        .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }}
+        table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }}
         th, td {{ padding: 12px 14px; text-align: center; border-bottom: 1px solid var(--border-color); }}
-        th {{ background-color: #1E293B; color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }}
-        tr.data-row:hover {{ background-color: #F1F5F9; }}
+        th {{ background-color: var(--artimo-dark); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }}
+        tr.data-row:hover {{ background-color: var(--artimo-light); }}
         
         .disk-status {{ padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }}
-        .disk-status.Normal {{ background-color: #D1FAE5; color: #065F46; }}
-        .disk-status.Falla {{ background-color: #FEE2E2; color: #991B1B; }}
-        .disk-status.SinDisco {{ background-color: #F1F5F9; color: #475569; }}
+        .disk-status.Normal {{ background-color: #E8F8F5; color: #2A9D8F; }}
+        .disk-status.Falla {{ background-color: #FDEDEC; color: #C8102E; }}
+        .disk-status.SinDisco {{ background-color: var(--artimo-light); color: var(--artimo-grey); }}
         
-        .footer-firma {{ text-align: center; padding: 40px 20px; margin-top: 20px; color: #94A3B8; font-size: 14px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); }}
-        .footer-firma span {{ font-size: 15px; font-weight: 700; color: var(--navy-primary); }}
+        .footer-firma {{ text-align: center; padding: 30px 20px; margin-top: 20px; color: var(--artimo-grey); font-size: 12px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); font-weight: 300; }}
+        .footer-firma span {{ font-size: 13px; font-weight: 700; color: var(--artimo-dark); }}
     </style>
 </head>
 <body>
-    <div class="header">
-        {html_logo}
-        <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
-        <div class="timestamp">🔄 Última actualización: {fecha_actualizacion} (Hora Colombia)</div>
+    <div class="top-navbar">
+        <div class="brand-container">
+            {html_logo}
+            <div class="navbar-title">Diagnóstico Continental Gold</div>
+        </div>
+        <div class="timestamp">🔄 Actualizado: {fecha_actualizacion}</div>
     </div>
+    
     <div class="dashboard-container">
         <div class="kpi-section">
             <div class="kpi-card"><h3>Total de Máquinas</h3><p class="number">{total_maquinas}</p></div>
-            <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #10B981;">{operando_cnt}</p></div>
-            <div class="kpi-card warning"><h3>Offline >15 Días (Crítico)</h3><p class="number" style="color: #F59E0B;">{equipos_criticos_antiguedad}</p></div>
-            <div class="kpi-card danger"><h3>Alertas Hardware</h3><p class="number" style="color: #EF4444;">{alertas_hardware}</p></div>
+            <div class="kpi-card highlight"><h3>Equipos Operando</h3><p class="number" style="color: #2A9D8F;">{operando_cnt}</p></div>
+            <div class="kpi-card"><h3>Offline >15 Días (Crítico)</h3><p class="number" style="color: #E9C46A;">{equipos_criticos_antiguedad}</p></div>
+            <div class="kpi-card highlight"><h3>Alertas Hardware</h3><p class="number" style="color: #C8102E;">{alertas_hardware}</p></div>
         </div>
         
         <div class="charts-section">
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaTransmision"></canvas></div>
-                <div class="chart-info-text">🔵 <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🔴 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
+                <div class="chart-info-text">⚫ <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🔴 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
@@ -300,7 +335,7 @@ plantilla_base = f'''
             document.getElementById('filterBar').style.display = 'none';
         }}
 
-        const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 15, weight: '600', family: 'Segoe UI' }}, color: '#334155', padding: {{bottom: 12}} }});
+        const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 14, weight: '700', family: 'var(--font-family)' }}, color: 'var(--artimo-dark)', padding: {{bottom: 12}} }});
         
         const onChartClick = (category) => (evt, elements, chart) => {{
             if (elements.length === 0) return;
@@ -315,20 +350,20 @@ plantilla_base = f'''
 
         new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#3B82F6', '#EF4444'], borderWidth: 1 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Estado de Transmisión') }}, onClick: onChartClick('trans') }} 
+            data: {{ labels: ['Operando', 'Falla de Transmisión'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2A9D8F', '#C8102E'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, font: {{ size: 11 }} }} }}, title: titleOptions('Estado de Transmisión') }}, onClick: onChartClick('trans') }} 
         }});
         
         new Chart(document.getElementById('graficaDisco').getContext('2d'), {{ 
             type: 'doughnut', 
-            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#10B981', '#EF4444', '#64748B'], borderWidth: 1 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Estado del Disco Duro') }}, onClick: onChartClick('disk') }} 
+            data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2A9D8F', '#C8102E', '#5A5A59'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, font: {{ size: 11 }} }} }}, title: titleOptions('Estado del Disco Duro') }}, onClick: onChartClick('disk') }} 
         }});
         
         new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ 
             type: 'pie', 
-            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#10B981', '#F59E0B'], borderWidth: 1 }}] }}, 
-            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
+            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2A9D8F', '#E9C46A'], borderWidth: 1 }}] }}, 
+            options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom', labels: {{ boxWidth: 10, font: {{ size: 11 }} }} }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
         }});
     </script>
 </body>
@@ -339,4 +374,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard analítico generado exitosamente!")
+print(f"¡Dashboard con la identidad de ÁRTIMO generado exitosamente!")
