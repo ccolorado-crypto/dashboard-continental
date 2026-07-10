@@ -1,0 +1,610 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>DIAGNOSTICO CONTINENTAL GOLD</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --artimo-rojo: #C8102E; --artimo-oscuro: #2D2D2D; --fondo-gris: #F5F7FA; --blanco: #FFFFFF; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--fondo-gris); color: var(--artimo-oscuro); }
+        .header { text-align: center; padding: 25px 0; background-color: var(--blanco); border-bottom: 5px solid var(--artimo-rojo); box-shadow: 0 4px 12px rgba(0,0,0,0.06); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+        .header img { max-height: 85px; object-fit: contain; }
+        h1 { color: var(--artimo-oscuro); margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }
+        .dashboard-container { display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 30px 20px; max-width: 1400px; margin: 0 auto; }
+        .kpi-section { display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 20px; }
+        .kpi-card { flex: 1; min-width: 250px; background: var(--blanco); border-radius: 8px; padding: 25px 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid var(--artimo-rojo); }
+        .kpi-card h3 { margin: 0 0 10px 0; color: #777; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
+        .kpi-card .number { margin: 0; font-size: 42px; font-weight: 800; color: var(--artimo-oscuro); }
+        .kpi-card.success { border-left-color: #2ECC71; }
+        .kpi-card.danger { border-left-color: var(--artimo-rojo); }
+        .charts-section { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }
+        .card { background-color: var(--blanco); border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 3px solid var(--artimo-rojo); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .chart-card { flex: 1; min-width: 300px; max-width: 32%; min-height: 420px; }
+        .chart-container { position: relative; width: 100%; height: 280px; flex-grow: 1; }
+        .chart-info-text { font-size: 12px; color: #555555; background-color: #F9F9F9; padding: 12px; margin-top: 15px; border-radius: 6px; border-left: 4px solid var(--artimo-rojo); line-height: 1.5; }
+        .table-card { width: 100%; padding: 0; overflow-x: auto; }
+        table.tabla-maquinas { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { padding: 12px 15px; text-align: center; border-bottom: 1px solid #EAEAEA; }
+        th { background-color: var(--artimo-rojo); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 12px; }
+        .disk-status { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }
+        .disk-status.Normal { background-color: #E8F8F5; color: #117A65; border: 1px solid #A3E4D7; }
+        .disk-status.Falla { background-color: #FDEDEC; color: #C0392B; border: 1px solid #F5B7B1; }
+        .disk-status.SinDisco { background-color: #F2F4F4; color: #7B7D7D; border: 1px solid #D5D8DC; }
+        .footer-firma { text-align: center; padding: 40px 20px; margin-top: 20px; color: #7f8c8d; font-size: 15px; letter-spacing: 1px; border-top: 1px solid #EAEAEA; }
+        .footer-firma span { font-family: 'Georgia', serif; font-size: 18px; font-weight: bold; font-style: italic; color: var(--artimo-rojo); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 style="color: #C8102E; font-size: 40px; margin: 0;">ARTIMO</h1>
+        <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
+    </div>
+    <div class="dashboard-container">
+        <div class="kpi-section">
+            <div class="kpi-card"><h3>Total de Máquinas</h3><p class="number">48</p></div>
+            <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #2ECC71;">11</p></div>
+            <div class="kpi-card danger"><h3>Alertas de Hardware</h3><p class="number" style="color: #C8102E;">83</p></div>
+        </div>
+        <div class="charts-section">
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaTransmision"></canvas></div><div class="chart-info-text">Operando vs Falla Transmisión</div></div>
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaDisco"></canvas></div><div class="chart-info-text">Estado del Almacenamiento 1</div></div>
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaCamaras"></canvas></div><div class="chart-info-text">Cámaras OK vs Dañadas</div></div>
+        </div>
+        <div class="card table-card">
+            <table border="1" class="dataframe tabla-maquinas">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Máquina</th>
+      <th>Última transmisión</th>
+      <th>Estado del Disco 1</th>
+      <th>CAM 1</th>
+      <th>CAM 2</th>
+      <th>CAM 3</th>
+      <th>CAM 4</th>
+      <th>CAM 5</th>
+      <th>CAM 6</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LS205</td>
+      <td>2025-08-14 08:27:01</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T004</td>
+      <td>2026-07-06 10:58:45</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>S205</td>
+      <td>2025-10-16 08:32:27</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S204</td>
+      <td>2025-08-08 08:12:44</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S103</td>
+      <td>2026-03-11 00:01:26</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS207</td>
+      <td>2026-06-01 10:11:46</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS206</td>
+      <td>2026-02-25 19:28:21</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T201</td>
+      <td>2025-08-12 15:19:40</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>S208</td>
+      <td>2026-07-06 08:24:17</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S207</td>
+      <td>2025-11-21 22:21:59</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S104</td>
+      <td>2026-07-06 08:51:22</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS301</td>
+      <td>2026-07-06 10:47:51</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS302</td>
+      <td>2026-03-24 00:49:15</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS203</td>
+      <td>2026-05-18 14:10:26</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS309</td>
+      <td>2026-07-06 10:43:17</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS201</td>
+      <td>2026-03-01 23:31:32</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T003</td>
+      <td>2026-07-06 10:42:54</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>S213</td>
+      <td>2025-07-06 16:48:49</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T302</td>
+      <td>2025-10-30 08:44:41</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T206</td>
+      <td>2025-10-29 14:27:16</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T303</td>
+      <td>2026-02-26 12:35:02</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T202</td>
+      <td>2026-06-07 23:38:49</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T205</td>
+      <td>2025-08-31 14:32:18</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T208</td>
+      <td>2026-07-06 11:05:04</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>S211</td>
+      <td>2025-12-13 19:51:48</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S210</td>
+      <td>2025-11-02 11:14:50</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S214</td>
+      <td>2026-06-08 11:14:38</td>
+      <td><span class="disk-status SinDisco">Sin Disco</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S215</td>
+      <td>2026-01-23 08:43:04</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS202</td>
+      <td>2025-11-03 23:15:30</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T301</td>
+      <td>2026-07-06 10:53:21</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>S201</td>
+      <td>2026-03-31 05:07:52</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS305</td>
+      <td>2026-07-05 12:58:12</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T006</td>
+      <td>2026-05-30 03:15:08</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T203</td>
+      <td>2026-04-19 20:37:06</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>LS306</td>
+      <td>2025-11-12 20:35:08</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS308</td>
+      <td>2025-09-27 08:26:04</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS303</td>
+      <td>2025-12-22 14:13:10</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>LS307</td>
+      <td>2025-10-12 02:00:22</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T103</td>
+      <td>2026-06-13 09:54:39</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T102</td>
+      <td>2026-05-28 22:36:55</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T011</td>
+      <td>2026-06-22 16:20:40</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T010</td>
+      <td>2026-07-06 11:03:39</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T002</td>
+      <td>2026-01-17 08:05:50</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T007</td>
+      <td>2026-06-17 04:04:16</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T001</td>
+      <td>2026-07-02 02:08:09</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+    </tr>
+    <tr>
+      <td>T008</td>
+      <td>2026-05-02 11:29:30</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>T009</td>
+      <td>2026-06-18 04:25:33</td>
+      <td><span class="disk-status Normal">Normal</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span style="color: #A0AEC0; font-weight: bold;">-</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+    <tr>
+      <td>S209</td>
+      <td>2025-01-31 09:16:08</td>
+      <td><span class="disk-status Falla">Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+      <td><span class="disk-status Normal">✓ OK</span></td>
+      <td><span class="disk-status Falla">✗ Falla</span></td>
+    </tr>
+  </tbody>
+</table>
+        </div>
+        <div class="footer-firma">Dashboard realizado por <span>Carlos Colorado</span></div>
+    </div>
+    <script>
+        const titleOptions = (titleText) => ({ display: true, text: titleText, font: { size: 16, weight: 'bold' }, color: '#2D2D2D', padding: {bottom: 10} });
+        new Chart(document.getElementById('graficaTransmision').getContext('2d'), { type: 'doughnut', data: { labels: ['Operando', 'Falla Trans.'], datasets: [{ data: [11, 37], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, title: titleOptions('Transmisión') } } });
+        new Chart(document.getElementById('graficaDisco').getContext('2d'), { type: 'doughnut', data: { labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{ data: [41, 6, 1], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, title: titleOptions('Salud de Discos') } } });
+        new Chart(document.getElementById('graficaCamaras').getContext('2d'), { type: 'bar', data: { labels: ['Cámaras OK', 'Cámaras Dañadas'], datasets: [{ label: 'Total', data: [86, 76], backgroundColor: ['#2ECC71', '#C8102E'], borderRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: titleOptions('Salud de Cámaras') } } });
+    </script>
+</body>
+</html>
