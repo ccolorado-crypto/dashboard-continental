@@ -4,7 +4,7 @@ import glob
 import base64
 from datetime import datetime
 
-print("Iniciando generación del Dashboard Interactivo Avanzado...")
+print("Iniciando generación del Dashboard Operativo Crítico...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
@@ -47,9 +47,27 @@ dashboard_data = df[columnas_base].copy()
 dashboard_data.columns = ['Máquina', 'Última transmisión', 'Estado del Disco 1']
 total_maquinas = len(dashboard_data)
 
-# --- PROCESAMIENTO ---
+# --- PROCESAMIENTO AVANZADO ---
+ahora = datetime.now()
 
-# DISCOS
+# Calcular Días Exactos Offline
+def calcular_dias_offline(val):
+    val_str = str(val).strip().lower()
+    if val_str == 'en línea': 
+        return 0
+    try:
+        fecha_trans = pd.to_datetime(val)
+        diff = (ahora - fecha_trans).days
+        return max(0, diff)
+    except:
+        return 30 # Valor preventivo si el formato de fecha se rompe
+
+dashboard_data['Días Offline'] = dashboard_data['Última transmisión'].fillna('En línea').apply(calcular_dias_offline)
+
+# Filtrado por Antigüedad Crítica (>15 días sin transmitir)
+equipos_criticos_antiguedad = int((dashboard_data['Días Offline'] > 15).sum())
+
+# Mapeo de Discos
 def mapear_estado_disco(estado):
     est = str(estado).strip().lower()
     if est == 'normal': return 'Normal'
@@ -62,28 +80,14 @@ disco_normal_cnt = int(conteo_discos.get('Normal', 0))
 disco_falla_cnt = int(conteo_discos.get('Falla', 0))
 disco_nodet_cnt = int(conteo_discos.get('No Detectado', 0))
 
-# TRANSMISIÓN (Nueva regla estricta de 5 días)
-ahora = datetime.now()
-def evaluar_transmision(val):
-    val_str = str(val).strip().lower()
-    if val_str == 'en línea': 
-        return 'Operando'
-    try:
-        # Convertir fecha del reporte a objeto datetime para comparar
-        fecha_trans = pd.to_datetime(val)
-        diferencia_dias = (ahora - fecha_trans).days
-        # Si lleva 5 o más días sin transmitir, es Falla
-        return 'Falla' if diferencia_dias >= 5 else 'Operando'
-    except: 
-        return 'Falla'
-
-dashboard_data['Status_Transmision'] = dashboard_data['Última transmisión'].fillna('Falla').apply(evaluar_transmision)
+# Evaluación de Transmisión
+dashboard_data['Status_Transmision'] = dashboard_data['Días Offline'].apply(lambda x: 'Falla' if x >= 5 else 'Operando')
 conteo_transmisiones = dashboard_data['Status_Transmision'].value_counts()
 dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].fillna('En línea')
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# CÁMARAS (12 Canales)
+# Canales de Cámaras
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
@@ -108,7 +112,30 @@ for i in range(1, 13):
 
 alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
-# --- CONSTRUCCIÓN DE LA TABLA HTML ---
+# --- CALCULAR INDICADOR DE GRAVEDAD POR VEHÍCULO ---
+def evaluar_gravedad(row):
+    # Regla Crítico: Sin transmisión (>=5 días) O problema de disco duro (Falla/No detectado)
+    if row['Status_Transmision'] == 'Falla' or row['Status_Disco'] in ['Falla', 'No Detectado']:
+        return '🔴 Crítico'
+    
+    # Verificar si tiene alguna cámara en Falla
+    tiene_camaras_danadas = any(row[c[2]] == 'Falla' for c in camaras_encontradas)
+    if tiene_camaras_danadas:
+        return '🟡 Advertencia'
+        
+    return '  Excelente'
+
+dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
+
+# ORDENAR LA TABLA DE MAYOR A MENOR SEGÚN DÍAS OFFLINE
+dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
+
+# --- CONSTRUCCIÓN DE LA TABLA HTML ENRIQUECIDA ---
+def style_gravedad(grav):
+    if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
+    if 'Advertencia' in grav: return '<b style="color: #D4AC0D;">🟡 Advertencia</b>'
+    return '<b style="color: #2ECC71;">🟢 Excelente</b>'
+
 def style_disk_status(st):
     if st == 'Normal': return '<span class="disk-status Normal">Normal</span>'
     if st == 'Falla': return '<span class="disk-status Falla">Falla</span>'
@@ -119,7 +146,7 @@ def style_cam_status(st):
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
     return '<span style="color: #CBD5E1; font-weight: bold;">-</span>'
 
-columnas_mostrar = ['Máquina', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
+columnas_mostrar = ['Gravedad', 'Máquina', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
 
 html_table = '<table class="tabla-maquinas">\n<thead>\n<tr>'
 for col in columnas_mostrar:
@@ -132,7 +159,9 @@ for idx, row in dashboard_data.iterrows():
     c_stat = 'Falla' if any(row[c[2]] == 'Falla' for c in camaras_encontradas) else 'Normal'
     
     html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}">'
+    html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
+    html_table += f'<td style="font-weight: bold; background-color: {"#FDEDEC" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
     
@@ -158,16 +187,16 @@ plantilla_base = f'''
         .header img {{ max-height: 85px; object-fit: contain; }}
         h1 {{ color: var(--artimo-oscuro); margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; }}
         
-        /* Mensaje de Última Actualización */
         .timestamp {{ font-size: 14px; color: #718096; background: #EDF2F7; padding: 6px 16px; border-radius: 20px; font-weight: 600; display: inline-block; margin-top: 5px; }}
         
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 30px 20px; max-width: 1400px; margin: 0 auto; }}
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 20px; }}
-        .kpi-card {{ flex: 1; min-width: 250px; background: var(--blanco); border-radius: 8px; padding: 25px 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid var(--artimo-rojo); }}
-        .kpi-card h3 {{ margin: 0 0 10px 0; color: #777; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }}
+        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 8px; padding: 25px 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid var(--artimo-rojo); }}
+        .kpi-card h3 {{ margin: 0 0 10px 0; color: #777; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
         .kpi-card .number {{ margin: 0; font-size: 42px; font-weight: 800; color: var(--artimo-oscuro); }}
         .kpi-card.success {{ border-left-color: #2ECC71; }}
         .kpi-card.danger {{ border-left-color: var(--artimo-rojo); }}
+        .kpi-card.warning {{ border-left-color: #E67E22; }}
         
         .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }}
         .card {{ background-color: var(--blanco); border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-top: 3px solid var(--artimo-rojo); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
@@ -205,7 +234,8 @@ plantilla_base = f'''
         <div class="kpi-section">
             <div class="kpi-card"><h3>Total de Máquinas</h3><p class="number">{total_maquinas}</p></div>
             <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #2ECC71;">{operando_cnt}</p></div>
-            <div class="kpi-card danger"><h3>Alertas de Hardware Críticas</h3><p class="number" style="color: #C8102E;">{alertas_hardware}</p></div>
+            <div class="kpi-card warning"><h3>Offline >15 Días (Crítico)</h3><p class="number" style="color: #E67E22;">{equipos_criticos_antiguedad}</p></div>
+            <div class="kpi-card danger"><h3>Alertas Hardware</h3><p class="number" style="color: #C8102E;">{alertas_hardware}</p></div>
         </div>
         
         <div class="charts-section">
@@ -300,4 +330,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard generado exitosamente!")
+print(f"¡Dashboard analítico generado exitosamente!")
