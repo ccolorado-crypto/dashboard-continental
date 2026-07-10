@@ -3,13 +3,13 @@ import os
 import glob
 import base64
 
-print("Iniciando generación del Dashboard Corporativo...")
+print("Iniciando generación del Dashboard...")
 
 carpeta_actual = os.getcwd()
 carpeta_data = os.path.join(carpeta_actual, 'data')
 carpeta_public = os.path.join(carpeta_actual, 'public')
 
-# Crear carpeta public automáticamente
+# ESTA ES LA LÍNEA CLAVE QUE EVITARÁ EL ERROR
 os.makedirs(carpeta_public, exist_ok=True)
 
 # 1. LOGO
@@ -107,7 +107,6 @@ for _, _, cam_name in camaras_encontradas:
 
 html_table = display_data.to_html(index=False, classes='tabla-maquinas', escape=False)
 
-# 3. PLANTILLA HTML
 plantilla_base = f'''
 <!DOCTYPE html>
 <html lang="es">
@@ -138,4 +137,46 @@ plantilla_base = f'''
         th, td {{ padding: 12px 15px; text-align: center; border-bottom: 1px solid #EAEAEA; }}
         th {{ background-color: var(--artimo-rojo); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 12px; }}
         .disk-status {{ padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }}
-        .disk-status
+        .disk-status.Normal {{ background-color: #E8F8F5; color: #117A65; border: 1px solid #A3E4D7; }}
+        .disk-status.Falla {{ background-color: #FDEDEC; color: #C0392B; border: 1px solid #F5B7B1; }}
+        .disk-status.SinDisco {{ background-color: #F2F4F4; color: #7B7D7D; border: 1px solid #D5D8DC; }}
+        .footer-firma {{ text-align: center; padding: 40px 20px; margin-top: 20px; color: #7f8c8d; font-size: 15px; letter-spacing: 1px; border-top: 1px solid #EAEAEA; }}
+        .footer-firma span {{ font-family: 'Georgia', serif; font-size: 18px; font-weight: bold; font-style: italic; color: var(--artimo-rojo); }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        {html_logo}
+        <h1>DIAGNOSTICO CONTINENTAL GOLD</h1>
+    </div>
+    <div class="dashboard-container">
+        <div class="kpi-section">
+            <div class="kpi-card"><h3>Total de Máquinas</h3><p class="number">{total_maquinas}</p></div>
+            <div class="kpi-card success"><h3>Equipos Operando</h3><p class="number" style="color: #2ECC71;">{operando_cnt}</p></div>
+            <div class="kpi-card danger"><h3>Alertas de Hardware</h3><p class="number" style="color: #C8102E;">{alertas_hardware}</p></div>
+        </div>
+        <div class="charts-section">
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaTransmision"></canvas></div><div class="chart-info-text">Operando vs Falla Transmisión</div></div>
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaDisco"></canvas></div><div class="chart-info-text">Estado del Almacenamiento 1</div></div>
+            <div class="card chart-card"><div class="chart-container"><canvas id="graficaCamaras"></canvas></div><div class="chart-info-text">Cámaras OK vs Dañadas</div></div>
+        </div>
+        <div class="card table-card">
+            {html_table}
+        </div>
+        <div class="footer-firma">Dashboard realizado por <span>Carlos Colorado</span></div>
+    </div>
+    <script>
+        const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 16, weight: 'bold' }}, color: '#2D2D2D', padding: {{bottom: 10}} }});
+        new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ type: 'doughnut', data: {{ labels: ['Operando', 'Falla Trans.'], datasets: [{{ data: [{operando_cnt}, {falla_trans_cnt}], backgroundColor: ['#2ECC71', '#C8102E'], borderWidth: 2 }}] }}, options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Transmisión') }} }} }});
+        new Chart(document.getElementById('graficaDisco').getContext('2d'), {{ type: 'doughnut', data: {{ labels: ['Normal', 'Falla', 'No Detectado'], datasets: [{{ data: [{disco_normal_cnt}, {disco_falla_cnt}, {disco_nodet_cnt}], backgroundColor: ['#2ECC71', '#C8102E', '#95A5A6'], borderWidth: 2 }}] }}, options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Discos') }} }} }});
+        new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ type: 'bar', data: {{ labels: ['Cámaras OK', 'Cámaras Dañadas'], datasets: [{{ label: 'Total', data: [{total_cam_ok}, {total_cam_falla}], backgroundColor: ['#2ECC71', '#C8102E'], borderRadius: 5 }}] }}, options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }}, title: titleOptions('Salud de Cámaras') }} }} }});
+    </script>
+</body>
+</html>
+'''
+
+ruta_guardado = os.path.join(carpeta_public, 'index.html')
+with open(ruta_guardado, 'w', encoding='utf-8') as f:
+    f.write(plantilla_base)
+
+print(f"¡Dashboard generado exitosamente en {ruta_guardado}!")
