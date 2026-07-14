@@ -379,3 +379,5 @@ with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
 print(f"¡Dashboard analítico definitivo generado con éxito!")
+
+
