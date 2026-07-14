@@ -97,7 +97,19 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# Canales de Cámaras (12 Canales)
+
+# --- CANALES DE CÁMARAS ACTUALIZADOS ---
+mapeo_camaras = {
+    1: 'REAR',
+    5: 'DMS',
+    6: 'ADAS',
+    7: 'LEFTDOWN',
+    8: 'LEFTREAR',
+    10: 'RIGHTDOWN',
+    11: 'RIGHTREAR',
+    12: 'FRONT'
+}
+
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
@@ -106,7 +118,8 @@ for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
-        cam_name = f'CAM {i}'
+        # Se asigna el nombre del mapeo si existe, si no, se deja como 'CAM X' por defecto
+        cam_name = mapeo_camaras.get(i, f'CAM {i}')
         camaras_encontradas.append((col_hab, col_est, cam_name))
         
         def evaluar_camara(row, h=col_hab, e=col_est):
@@ -329,7 +342,7 @@ plantilla_base = f'''
         <div class="charts-section">
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaTransmision"></canvas></div>
-                <div class="chart-info-text">⚫ <strong>Operando:</strong> Transmitió hace menos de 5 días.<br>🔴 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
+                <div class="chart-info-text">⚫ <strong>Operando:</strong> Transmitió hace menos de 5 days.<br>🔴 <strong>Falla:</strong> 5 días o más sin reportar datos.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
@@ -399,7 +412,7 @@ plantilla_base = f'''
                 if (rowValue === value) {{
                     row.style.display = '';
                     count++;
-                }} else {{
+                } else {{
                     row.style.display = 'none';
                 }}
             }});
