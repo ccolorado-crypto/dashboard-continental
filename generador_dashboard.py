@@ -60,7 +60,6 @@ total_maquinas = len(dashboard_data)
 # --- PROCESAMIENTO AVANZADO ---
 ahora = datetime.now()
 
-# Calcular Días Exactos Offline
 def calcular_dias_offline(val):
     val_str = str(val).strip().lower()
     if val_str == 'en línea': 
@@ -73,11 +72,8 @@ def calcular_dias_offline(val):
         return 30
 
 dashboard_data['Días Offline'] = dashboard_data['Última transmisión'].fillna('En línea').apply(calcular_dias_offline)
-
-# Filtrado por Antigüedad Crítica (>15 días sin transmitir)
 equipos_criticos_antiguedad = int((dashboard_data['Días Offline'] > 15).sum())
 
-# Mapeo de Discos
 def mapear_estado_disco(estado):
     est = str(estado).strip().lower()
     if est == 'normal': return 'Normal'
@@ -90,24 +86,16 @@ disco_normal_cnt = int(conteo_discos.get('Normal', 0))
 disco_falla_cnt = int(conteo_discos.get('Falla', 0))
 disco_nodet_cnt = int(conteo_discos.get('No Detectado', 0))
 
-# Evaluación de Transmisión
 dashboard_data['Status_Transmision'] = dashboard_data['Días Offline'].apply(lambda x: 'Falla' if x >= 5 else 'Operando')
 conteo_transmisiones = dashboard_data['Status_Transmision'].value_counts()
 dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].fillna('En línea')
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-
 # --- CANALES DE CÁMARAS ACTUALIZADOS ---
 mapeo_camaras = {
-    1: 'REAR',
-    5: 'DMS',
-    6: 'ADAS',
-    7: 'LEFTDOWN',
-    8: 'LEFTREAR',
-    10: 'RIGHTDOWN',
-    11: 'RIGHTREAR',
-    12: 'FRONT'
+    1: 'REAR', 5: 'DMS', 6: 'ADAS', 7: 'LEFTDOWN',
+    8: 'LEFTREAR', 10: 'RIGHTDOWN', 11: 'RIGHTREAR', 12: 'FRONT'
 }
 
 camaras_encontradas = []
@@ -134,27 +122,19 @@ for i in range(1, 13):
 
 alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
-# --- CALCULAR INDICADOR DE GRAVEDAD POR VEHÍCULO ---
 def evaluar_gravedad(row):
     if row['Status_Transmision'] == 'Falla' or row['Status_Disco'] in ['Falla', 'No Detectado']:
         return '🔴 Crítico'
-    
     tiene_camaras_danadas = any(row[c[2]] == 'Falla' for c in camaras_encontradas)
-    if tiene_camaras_danadas:
-        return '🟡 Advertencia'
-        
+    if tiene_camaras_danadas: return '🟡 Advertencia'
     return '  Excelente'
 
 dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
-
-# ORDENAR LA TABLA DE MAYOR A MENOR SEGÚN DÍAS OFFLINE
 dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
-# --- DATA CRUDA EN FORMATO JSON PARA JS DOWNLOAD ---
 raw_export_data = dashboard_data.to_dict(orient='records')
 json_raw_data = json.dumps(raw_export_data, default=str)
 
-# --- CONSTRUCCIÓN DE LA TABLA HTML ---
 def style_gravedad(grav):
     if 'Crítico' in grav: return '<b style="color: #C8102E;">🔴 Crítico</b>'
     if 'Advertencia' in grav: return '<b style="color: #E9C46A;">🟡 Advertencia</b>'
@@ -188,14 +168,11 @@ for idx, row in dashboard_data.iterrows():
     html_table += f'<td style="font-weight: 700; background-color: {"#FFF5F5" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
-    
     for _, _, cam_name in camaras_encontradas:
         html_table += f'<td>{style_cam_status(row[cam_name])}</td>'
-        
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
 
-# 3. PLANTILLA HTML CON IDENTIDAD CORPORATIVA Y BOTONES DE DESCARGA
 plantilla_base = f'''
 <!DOCTYPE html>
 <html lang="es">
@@ -205,101 +182,48 @@ plantilla_base = f'''
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {{ 
-            --artimo-red: #C8102E; 
-            --artimo-dark: #333333; 
-            --artimo-grey: #5A5A59; 
-            --artimo-light: #F4F4F4;
-            --blanco: #FFFFFF; 
-            --border-color: #E5E7EB;
+            --artimo-red: #C8102E; --artimo-dark: #333333; --artimo-grey: #5A5A59; 
+            --artimo-light: #F4F4F4; --blanco: #FFFFFF; --border-color: #E5E7EB;
             --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }}
         body {{ font-family: var(--font-family); margin: 0; padding: 0; background-color: var(--artimo-light); color: var(--artimo-dark); }}
-        
-        /* BARRA SUPERIOR FIJA 56PX */
-        .top-navbar {{ 
-            height: 56px; 
-            background-color: var(--blanco); 
-            border-bottom: 1px solid var(--border-color); 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 0 24px;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }}
+        .top-navbar {{ height: 56px; background-color: var(--blanco); border-bottom: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; position: sticky; top: 0; z-index: 1000; }}
         .brand-container {{ display: flex; align-items: center; gap: 12px; }}
         .brand-logo {{ max-height: 36px; object-fit: contain; }}
         .navbar-title {{ font-size: 14px; font-weight: 700; color: var(--artimo-dark); letter-spacing: 0.5px; text-transform: uppercase; }}
-        
-        /* PANEL DE CONTROLES Y DESCARGAS */
         .navbar-actions {{ display: flex; align-items: center; gap: 10px; }}
-        .btn-download {{ 
-            background-color: var(--blanco);
-            color: var(--artimo-dark);
-            border: 1px solid var(--border-color);
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.15s ease;
-        }}
+        .btn-download {{ background-color: var(--blanco); color: var(--artimo-dark); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease; }}
         .btn-download:hover {{ background-color: var(--artimo-light); border-color: var(--artimo-grey); }}
         .btn-download.primary {{ background-color: var(--artimo-red); color: var(--blanco); border-color: var(--artimo-red); }}
         .btn-download.primary:hover {{ background-color: #A50D24; }}
-        
         .timestamp {{ font-size: 11px; color: var(--artimo-grey); background: var(--artimo-light); padding: 6px 12px; border-radius: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
-        
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto; }}
-        
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 16px; }}
-        .kpi-card {{ 
-            flex: 1; 
-            min-width: 220px; 
-            background: var(--blanco); 
-            border-radius: 12px; 
-            padding: 20px; 
-            text-align: center; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
-            border: 1px solid var(--border-color); 
-        }}
+        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border-color); }}
         .kpi-card h3 {{ margin: 0 0 8px 0; color: var(--artimo-grey); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }}
         .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--artimo-dark); }}
         .kpi-card.highlight {{ border-top: 4px solid var(--artimo-red); }}
-        
         .charts-section {{ display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; width: 100%; }}
         .card {{ background-color: var(--blanco); border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border-color); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }}
         .chart-card {{ flex: 1; min-width: 300px; max-width: 32%; min-height: 430px; transition: transform 0.15s ease; }}
         .chart-card:hover {{ transform: translateY(-3px); cursor: pointer; border-color: var(--artimo-grey); }}
         .chart-container {{ position: relative; width: 100%; height: 260px; flex-grow: 1; }}
-        
         .chart-info-text {{ font-size: 11px; color: var(--artimo-grey); background-color: var(--artimo-light); padding: 10px; margin-top: 12px; border-radius: 8px; border-left: 3px solid var(--artimo-red); line-height: 1.5; }}
-        
         .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-red); }}
         .filter-msg {{ font-weight: 600; color: var(--artimo-dark); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }}
         .btn-reset {{ background: var(--artimo-dark); color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
         .btn-reset:hover {{ background: var(--artimo-red); }}
-        
         .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }}
         table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }}
         th, td {{ padding: 12px 14px; text-align: center; border-bottom: 1px solid var(--border-color); }}
         th {{ background-color: var(--artimo-dark); color: var(--blanco); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }}
         tr.data-row:hover {{ background-color: var(--artimo-light); }}
-        
         .disk-status {{ padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; display: inline-block; }}
         .disk-status.Normal {{ background-color: #E8F8F5; color: #2A9D8F; }}
         .disk-status.Falla {{ background-color: #FDEDEC; color: #C8102E; }}
         .disk-status.SinDisco {{ background-color: var(--artimo-light); color: var(--artimo-grey); }}
-        
         .footer-firma {{ text-align: center; padding: 30px 20px; margin-top: 20px; color: var(--artimo-grey); font-size: 12px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); font-weight: 300; }}
         .footer-firma span {{ font-size: 13px; font-weight: 700; color: var(--artimo-dark); }}
-
-        /* ESTILOS EXCLUSIVOS PARA IMPRESIÓN (PDF) */
         @media print {{
             body {{ background-color: #ffffff; color: #000000; font-size: 10px; }}
             .top-navbar, .navbar-actions, .filter-bar, .chart-info-text, .footer-firma {{ display: none !important; }}
@@ -321,12 +245,8 @@ plantilla_base = f'''
         </div>
         <div class="navbar-actions">
             <span class="timestamp">🔄 {fecha_actualizacion}</span>
-            <button class="btn-download" onclick="exportCSV()">
-                📥 Data Cruda (.csv)
-            </button>
-            <button class="btn-download primary" onclick="exportPDF()">
-                📄 Exportar PDF
-            </button>
+            <button class="btn-download" onclick="exportCSV()">📥 Data Cruda (.csv)</button>
+            <button class="btn-download primary" onclick="exportPDF()">📄 Exportar PDF</button>
         </div>
     </div>
     
@@ -365,20 +285,16 @@ plantilla_base = f'''
     </div>
     
     <script>
-        // Inyectamos la data cruda directamente en formato JSON
         const rawJsonData = {json_raw_data};
 
         function exportCSV() {{
             if (!rawJsonData || rawJsonData.length === 0) return;
-            
-            // Extraer cabeceras del JSON
             const headers = Object.keys(rawJsonData[0]);
             const csvRows = [headers.join(',')];
             
             for (const row of rawJsonData) {{
                 const values = headers.map(header => {{
                     const val = row[header];
-                    // Escapar strings que contengan comas
                     const valEscaped = ('' + (val !== null ? val : '')).replace(/"/g, '\\"');
                     return `"${{valEscaped}}"`;
                 }});
@@ -395,9 +311,7 @@ plantilla_base = f'''
             document.body.removeChild(link);
         }}
 
-        function exportPDF() {{
-            window.print();
-        }}
+        function exportPDF() {{ window.print(); }}
 
         function filterTable(category, value, labelName) {{
             const rows = document.querySelectorAll('.data-row');
