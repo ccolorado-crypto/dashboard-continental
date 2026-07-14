@@ -97,6 +97,18 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
+# --- MAPEO PERSONALIZADO DE CÁMARAS ---
+nombres_camaras_personalizados = {
+    1: 'READ',
+    5: 'DMS',
+    6: 'ADAS',
+    7: 'LEFTDOWN',
+    8: 'LEFTREAR',
+    10: 'RIGHTDOWN',
+    11: 'RIGHTREAR',
+    12: 'FRONT'
+}
+
 # Canales de Cámaras (12 Canales)
 camaras_encontradas = []
 total_cam_ok = 0
@@ -106,7 +118,8 @@ for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
-        cam_name = f'CAM {i}'
+        # Asigna el nombre personalizado si existe, de lo contrario deja "CAM X"
+        cam_name = nombres_camaras_personalizados.get(i, f'CAM {i}')
         camaras_encontradas.append((col_hab, col_est, cam_name))
         
         def evaluar_camara(row, h=col_hab, e=col_est):
@@ -131,7 +144,7 @@ def evaluar_gravedad(row):
     if tiene_camaras_danadas:
         return '🟡 Advertencia'
         
-    return '  Excelente'
+    return '🟢 Excelente'
 
 dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
 
@@ -453,5 +466,3 @@ with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
 print(f"¡Dashboard analítico definitivo generado con éxito!")
-
-
