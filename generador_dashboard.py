@@ -18,7 +18,7 @@ fecha_servidor = datetime.now()
 fecha_colombia = fecha_servidor - timedelta(hours=5)
 fecha_actualizacion = fecha_colombia.strftime("%d/%m/%Y %I:%M %p")
 
-# 1. LOGO OFICIAL DE ÁRTIMO (logoartimogrande.jpg)
+# 1. LOGO OFICIAL DE ÁRTIMO
 ruta_logo_oficial = os.path.join(carpeta_data, 'logoartimogrande.jpg')
 logo_base64_src = ""
 
@@ -46,21 +46,34 @@ ruta_archivo = archivos_datos[0]
 if ruta_archivo.lower().endswith('.csv'):
     df = pd.read_csv(ruta_archivo, on_bad_lines='skip', engine='python')
 else:
+    import warnings
+    warnings.filterwarnings('ignore') # Ignora alertas visuales de openpyxl
     df = pd.read_excel(ruta_archivo)
 
+# Limpiar fila de cabecera duplicada si existe
 if not df.empty and str(df.iloc[0, 0]).strip() == 'Estado en línea':
     df = df.drop(index=0)
 df.columns = df.columns.str.strip()
 
-columnas_base = ['Número de matrícula', 'Tiempo fuera de línea', 'Estado de salud del almacenamiento 1']
+# --- EXTRACCIÓN DE COLUMNAS (Incluyendo la Flota) ---
+# Asegurarnos de encontrar la columna de Flota (generalmente la C, índice 2)
+if 'Flota asignada' not in df.columns:
+    col_flota_fallback = df.columns[2] if len(df.columns) > 2 else df.columns[1]
+    df['Flota asignada'] = df[col_flota_fallback]
+
+columnas_base = ['Número de matrícula', 'Flota asignada', 'Tiempo fuera de línea', 'Estado de salud del almacenamiento 1']
 dashboard_data = df[columnas_base].copy()
-dashboard_data.columns = ['Máquina', 'Última transmisión', 'Estado del Disco 1']
+dashboard_data.columns = ['Máquina', 'Flota', 'Última transmisión', 'Estado del Disco 1']
 total_maquinas = len(dashboard_data)
+
+# Limpiar y preparar lista única de Flotas para el filtro
+dashboard_data['Flota'] = dashboard_data['Flota'].fillna('Sin Flota asignada')
+flotas_unicas = sorted([str(f).strip() for f in dashboard_data['Flota'].unique() if str(f).strip() != ''])
+opciones_flota = '\n'.join([f'<option value="{f}">{f}</option>' for f in flotas_unicas])
 
 # --- PROCESAMIENTO AVANZADO ---
 ahora = datetime.now()
 
-# Calcular Días Exactos Offline
 def calcular_dias_offline(val):
     val_str = str(val).strip().lower()
     if val_str == 'en línea': 
@@ -99,7 +112,7 @@ falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
 # --- MAPEO PERSONALIZADO DE CÁMARAS ---
 nombres_camaras_personalizados = {
-    1: 'REAR',
+    1: 'READ',
     5: 'DMS',
     6: 'ADAS',
     7: 'LEFTDOWN',
@@ -109,7 +122,6 @@ nombres_camaras_personalizados = {
     12: 'FRONT'
 }
 
-# Canales de Cámaras (12 Canales)
 camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
@@ -118,7 +130,6 @@ for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
-        # Asigna el nombre personalizado si existe, de lo contrario deja "CAM X"
         cam_name = nombres_camaras_personalizados.get(i, f'CAM {i}')
         camaras_encontradas.append((col_hab, col_est, cam_name))
         
@@ -171,7 +182,8 @@ def style_cam_status(st):
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
     return '<span style="color: #5A5A59; font-weight: bold;">-</span>'
 
-columnas_mostrar = ['Gravedad', 'Máquina', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
+# Agregamos 'Flota' a la vista
+columnas_mostrar = ['Gravedad', 'Máquina', 'Flota', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
 
 html_table = '<table class="tabla-maquinas">\n<thead>\n<tr>'
 for col in columnas_mostrar:
@@ -183,9 +195,14 @@ for idx, row in dashboard_data.iterrows():
     d_stat = row['Status_Disco']
     c_stat = 'Falla' if any(row[c[2]] == 'Falla' for c in camaras_encontradas) else 'Normal'
     
-    html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}">'
+    flota_escaped = str(row["Flota"]).replace('"', '&quot;')
+    
+    # Inyectamos data-flota para poder filtrar desde JS
+    html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}" data-flota="{flota_escaped}">'
     html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
+    # Celda de Flota con estilo para no romper la tabla si el nombre es muy largo
+    html_table += f'<td style="font-size: 11px; color: #555; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{flota_escaped}">{row["Flota"]}</td>'
     html_table += f'<td style="font-weight: 700; background-color: {"#FFF5F5" if row["Días Offline"] >= 5 else "inherit"}">{row["Días Offline"]}</td>'
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
@@ -216,7 +233,6 @@ plantilla_base = f'''
         }}
         body {{ font-family: var(--font-family); margin: 0; padding: 0; background-color: var(--artimo-light); color: var(--artimo-dark); }}
         
-        /* BARRA SUPERIOR FIJA 56PX */
         .top-navbar {{ 
             height: 56px; 
             background-color: var(--blanco); 
@@ -234,7 +250,6 @@ plantilla_base = f'''
         .brand-logo {{ max-height: 36px; object-fit: contain; }}
         .navbar-title {{ font-size: 14px; font-weight: 700; color: var(--artimo-dark); letter-spacing: 0.5px; text-transform: uppercase; }}
         
-        /* PANEL DE CONTROLES Y DESCARGAS */
         .navbar-actions {{ display: flex; align-items: center; gap: 10px; }}
         .btn-download {{ 
             background-color: var(--blanco);
@@ -245,9 +260,7 @@ plantilla_base = f'''
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            display: flex; align-items: center; gap: 6px;
             transition: all 0.15s ease;
         }}
         .btn-download:hover {{ background-color: var(--artimo-light); border-color: var(--artimo-grey); }}
@@ -259,16 +272,7 @@ plantilla_base = f'''
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto; }}
         
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 16px; }}
-        .kpi-card {{ 
-            flex: 1; 
-            min-width: 220px; 
-            background: var(--blanco); 
-            border-radius: 12px; 
-            padding: 20px; 
-            text-align: center; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
-            border: 1px solid var(--border-color); 
-        }}
+        .kpi-card {{ flex: 1; min-width: 220px; background: var(--blanco); border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--border-color); }}
         .kpi-card h3 {{ margin: 0 0 8px 0; color: var(--artimo-grey); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }}
         .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--artimo-dark); }}
         .kpi-card.highlight {{ border-top: 4px solid var(--artimo-red); }}
@@ -281,8 +285,13 @@ plantilla_base = f'''
         
         .chart-info-text {{ font-size: 11px; color: var(--artimo-grey); background-color: var(--artimo-light); padding: 10px; margin-top: 12px; border-radius: 8px; border-left: 3px solid var(--artimo-red); line-height: 1.5; }}
         
-        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-red); }}
-        .filter-msg {{ font-weight: 600; color: var(--artimo-dark); font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }}
+        /* NUEVO DISEÑO PARA LA BARRA DE FILTROS */
+        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: #fff; border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-red); flex-wrap: wrap; gap: 10px; }}
+        .filter-group {{ display: flex; align-items: center; gap: 10px; }}
+        .filter-label {{ font-weight: 700; font-size: 12px; color: var(--artimo-dark); text-transform: uppercase; }}
+        .filter-select {{ padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-family: var(--font-family); font-size: 12px; outline: none; cursor: pointer; max-width: 300px; }}
+        
+        .filter-msg {{ font-weight: 600; color: var(--artimo-dark); font-size: 13px; letter-spacing: 0.5px; background: #FFF5F5; padding: 6px 12px; border-radius: 6px; color: var(--artimo-red); }}
         .btn-reset {{ background: var(--artimo-dark); color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
         .btn-reset:hover {{ background: var(--artimo-red); }}
         
@@ -300,7 +309,6 @@ plantilla_base = f'''
         .footer-firma {{ text-align: center; padding: 30px 20px; margin-top: 20px; color: var(--artimo-grey); font-size: 12px; letter-spacing: 0.5px; border-top: 1px solid var(--border-color); font-weight: 300; }}
         .footer-firma span {{ font-size: 13px; font-weight: 700; color: var(--artimo-dark); }}
 
-        /* ESTILOS EXCLUSIVOS PARA IMPRESIÓN (PDF) */
         @media print {{
             body {{ background-color: #ffffff; color: #000000; font-size: 10px; }}
             .top-navbar, .navbar-actions, .filter-bar, .chart-info-text, .footer-firma {{ display: none !important; }}
@@ -346,7 +354,7 @@ plantilla_base = f'''
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaDisco"></canvas></div>
-                <div class="chart-info-text">💡 Filtra la tabla por estado de disco duro.</div>
+                <div class="chart-info-text">💡 Haz clic en una porción para filtrar la tabla inferior.</div>
             </div>
             <div class="card chart-card">
                 <div class="chart-container"><canvas id="graficaCamaras"></canvas></div>
@@ -354,9 +362,17 @@ plantilla_base = f'''
             </div>
         </div>
         
-        <div class="filter-bar" id="filterBar" style="display: none;">
-            <div class="filter-msg" id="filterMessage">Mostrando resultados filtrados</div>
-            <button class="btn-reset" onclick="resetFilters()">Mostrar Todos</button>
+        <!-- BARRA DE FILTROS ACTUALIZADA (FLOTA + GRÁFICAS) -->
+        <div class="filter-bar" id="filterBar">
+            <div class="filter-group">
+                <label for="flotaFilter" class="filter-label">🏢 Flota:</label>
+                <select id="flotaFilter" class="filter-select" onchange="applyFilters()">
+                    <option value="ALL">Mostrar Todas las Flotas</option>
+                    {opciones_flota}
+                </select>
+            </div>
+            <div class="filter-msg" id="filterMessage" style="display: none;"></div>
+            <button class="btn-reset" onclick="resetFilters()" id="btnReset" style="display: none;">Limpiar Filtros</button>
         </div>
         
         <div class="card table-card">
@@ -366,26 +382,20 @@ plantilla_base = f'''
     </div>
     
     <script>
-        // Inyectamos la data cruda directamente en formato JSON
         const rawJsonData = {json_raw_data};
 
         function exportCSV() {{
             if (!rawJsonData || rawJsonData.length === 0) return;
-            
-            // Extraer cabeceras del JSON
             const headers = Object.keys(rawJsonData[0]);
             const csvRows = [headers.join(',')];
-            
             for (const row of rawJsonData) {{
                 const values = headers.map(header => {{
                     const val = row[header];
-                    // Escapar strings que contengan comas
                     const valEscaped = ('' + (val !== null ? val : '')).replace(/"/g, '\\"');
                     return `"${{valEscaped}}"`;
                 }});
                 csvRows.push(values.join(','));
             }}
-            
             const csvContent = "data:text/csv;charset=utf-8,\\uFEFF" + csvRows.join('\\n');
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
@@ -396,36 +406,77 @@ plantilla_base = f'''
             document.body.removeChild(link);
         }}
 
-        function exportPDF() {{
-            window.print();
-        }}
+        function exportPDF() {{ window.print(); }}
+
+        // LÓGICA AVANZADA DE FILTROS CRUZADOS (Flota + Clic en Gráficas)
+        let currentChartFilter = null;
 
         function filterTable(category, value, labelName) {{
+            currentChartFilter = {{ category: category, value: value, label: labelName }};
+            applyFilters();
+            document.getElementById('filterBar').scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+        }}
+
+        function applyFilters() {{
+            const flotaValue = document.getElementById('flotaFilter').value;
             const rows = document.querySelectorAll('.data-row');
             let count = 0;
+            
             rows.forEach(row => {{
-                let rowValue = '';
-                if (category === 'trans') rowValue = row.getAttribute('data-trans');
-                if (category === 'disk') rowValue = row.getAttribute('data-disk');
-                if (category === 'cam') rowValue = row.getAttribute('data-cam');
+                let show = true;
                 
-                if (rowValue === value) {{
+                // 1. Validar Filtro de Flota
+                const rowFlota = row.getAttribute('data-flota');
+                if (flotaValue !== 'ALL' && rowFlota !== flotaValue) {{
+                    show = false;
+                }}
+                
+                // 2. Validar Filtro de Gráfica
+                if (currentChartFilter) {{
+                    let rowChartVal = '';
+                    if (currentChartFilter.category === 'trans') rowChartVal = row.getAttribute('data-trans');
+                    if (currentChartFilter.category === 'disk') rowChartVal = row.getAttribute('data-disk');
+                    if (currentChartFilter.category === 'cam') rowChartVal = row.getAttribute('data-cam');
+                    
+                    if (rowChartVal !== currentChartFilter.value) {{
+                        show = false;
+                    }}
+                }}
+                
+                // Aplicar visibilidad
+                if (show) {{
                     row.style.display = '';
                     count++;
                 }} else {{
                     row.style.display = 'none';
                 }}
             }});
-            document.getElementById('filterBar').style.display = 'flex';
-            document.getElementById('filterMessage').innerText = `🔎 Filtrado por: ${{labelName}} (${{count}} equipos)`;
-            document.getElementById('filterBar').scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+            
+            // Actualizar interfaz del mensaje de filtro
+            const msgEl = document.getElementById('filterMessage');
+            const resetBtn = document.getElementById('btnReset');
+            
+            let activeFilters = [];
+            if (currentChartFilter) activeFilters.push(`Gráfica: ${{currentChartFilter.label}}`);
+            if (flotaValue !== 'ALL') activeFilters.push(`Solo esta Flota`);
+            
+            if (activeFilters.length > 0) {{
+                msgEl.style.display = 'inline-block';
+                resetBtn.style.display = 'inline-block';
+                msgEl.innerText = `🔎 Filtrado por: ${{activeFilters.join(' + ')}} (${{count}} equipos encontrados)`;
+            }} else {{
+                msgEl.style.display = 'none';
+                resetBtn.style.display = 'none';
+            }}
         }}
 
         function resetFilters() {{
-            document.querySelectorAll('.data-row').forEach(row => row.style.display = '');
-            document.getElementById('filterBar').style.display = 'none';
+            document.getElementById('flotaFilter').value = 'ALL';
+            currentChartFilter = null;
+            applyFilters();
         }}
 
+        // CONFIGURACIÓN DE GRÁFICAS
         const titleOptions = (titleText) => ({{ display: true, text: titleText, font: {{ size: 14, weight: '700', family: 'var(--font-family)' }}, color: 'var(--artimo-dark)', padding: {{bottom: 12}} }});
         
         const onChartClick = (category) => (evt, elements, chart) => {{
@@ -465,4 +516,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard analítico definitivo generado con éxito!")
+print(f"¡Dashboard analítico con filtro de flota generado con éxito!")
