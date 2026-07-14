@@ -381,3 +381,4 @@ with open(ruta_guardado, 'w', encoding='utf-8') as f:
 print(f"¡Dashboard analítico definitivo generado con éxito!")
 
 
+
