@@ -118,7 +118,6 @@ for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
-        # Se asigna el nombre del mapeo si existe, si no, se deja como 'CAM X' por defecto
         cam_name = mapeo_camaras.get(i, f'CAM {i}')
         camaras_encontradas.append((col_hab, col_est, cam_name))
         
@@ -412,7 +411,7 @@ plantilla_base = f'''
                 if (rowValue === value) {{
                     row.style.display = '';
                     count++;
-                } else {{
+                }} else {{
                     row.style.display = 'none';
                 }}
             }});
