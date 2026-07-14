@@ -99,7 +99,7 @@ falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
 # --- MAPEO PERSONALIZADO DE CÁMARAS ---
 nombres_camaras_personalizados = {
-    1: 'READ',
+    1: 'REAR',
     5: 'DMS',
     6: 'ADAS',
     7: 'LEFTDOWN',
