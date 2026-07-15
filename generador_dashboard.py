@@ -110,7 +110,7 @@ dashboard_data['Última transmisión'] = dashboard_data['Última transmisión'].
 operando_cnt = int(conteo_transmisiones.get('Operando', 0))
 falla_trans_cnt = int(conteo_transmisiones.get('Falla', 0))
 
-# --- MAPEO PERSONALIZADO DE CÁMARAS ---
+# --- MAPEO PERSONALIZADO DE CÁMARAS PERMITIDAS ---
 nombres_camaras_personalizados = {
     1: 'READ',
     5: 'DMS',
@@ -126,23 +126,47 @@ camaras_encontradas = []
 total_cam_ok = 0
 total_cam_falla = 0
 
+# Solo iteramos y agregamos las cámaras que están dentro de las permitidas
 for i in range(1, 13):
     col_hab = f'Cámara {i} habilitada'
     col_est = f'Estado de la cámara {i}'
     if col_hab in df.columns and col_est in df.columns:
-        cam_name = nombres_camaras_personalizados.get(i, f'CAM {i}')
-        camaras_encontradas.append((col_hab, col_est, cam_name))
-        
-        def evaluar_camara(row, h=col_hab, e=col_est):
-            hab = str(row.get(h, '')).strip().lower()
-            est = str(row.get(e, '')).strip().lower()
-            if hab == 'abrir':
-                return 'Normal' if est == 'normal' else 'Falla'
-            return 'N/A'
+        # Verificamos si la cámara actual es una de las 8 permitidas
+        if i in nombres_camaras_personalizados:
+            cam_name = nombres_camaras_personalizados[i]
+            camaras_encontradas.append((col_hab, col_est, cam_name))
             
-        dashboard_data[cam_name] = df.apply(evaluar_camara, axis=1)
-        total_cam_ok += (dashboard_data[cam_name] == 'Normal').sum()
-        total_cam_falla += (dashboard_data[cam_name] == 'Falla').sum()
+            def evaluar_camara(row, h=col_hab, e=col_est):
+                hab = str(row.get(h, '')).strip().lower()
+                est = str(row.get(e, '')).strip().lower()
+                if hab == 'abrir':
+                    return 'Normal' if est == 'normal' else 'Falla'
+                return 'N/A'
+                
+            dashboard_data[cam_name] = df.apply(evaluar_camara, axis=1)
+            total_cam_ok += (dashboard_data[cam_name] == 'Normal').sum()
+            total_cam_falla += (dashboard_data[cam_name] == 'Falla').sum()
+
+# --- DETECCIÓN DE CANALES NO PERMITIDOS ACTIVO ---
+# Definimos los canales que no deberían estar habilitados (p.ej. 2, 3, 4, 9)
+canales_no_permitidos = [i for i in range(1, 13) if i not in nombres_camaras_personalizados]
+
+def generar_comentario(row):
+    canales_activos_erroneos = []
+    for i in canales_no_permitidos:
+        col_hab = f'Cámara {i} habilitada'
+        if col_hab in df.columns:
+            hab = str(row.get(col_hab, '')).strip().lower()
+            # Si el canal no permitido está "abrir", se reporta el error de configuración
+            if hab == 'abrir':
+                canales_activos_erroneos.append(f"CAM {i}")
+    
+    if canales_activos_erroneos:
+        return f"⚠️ Canales activos no permitidos: {', '.join(canales_activos_erroneos)}"
+    return "Sin observaciones"
+
+# Guardamos los comentarios dinámicos en los datos
+dashboard_data['Comentario'] = df.apply(generar_comentario, axis=1)
 
 alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
@@ -182,8 +206,8 @@ def style_cam_status(st):
     if st == 'Falla': return '<span class="disk-status Falla">✗ Falla</span>'
     return '<span style="color: #5A5A59; font-weight: bold;">-</span>'
 
-# Agregamos 'Flota' a la vista
-columnas_mostrar = ['Gravedad', 'Máquina', 'Flota', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas]
+# Agregamos 'Flota' y 'Comentario' a la visualización de columnas
+columnas_mostrar = ['Gravedad', 'Máquina', 'Flota', 'Días Offline', 'Última transmisión', 'Estado del Disco 1'] + [c[2] for c in camaras_encontradas] + ['Comentario']
 
 html_table = '<table class="tabla-maquinas">\n<thead>\n<tr>'
 for col in columnas_mostrar:
@@ -209,6 +233,15 @@ for idx, row in dashboard_data.iterrows():
     
     for _, _, cam_name in camaras_encontradas:
         html_table += f'<td>{style_cam_status(row[cam_name])}</td>'
+    
+    # NUEVO: Agregamos la celda Comentario con formato condicional (Rojo si hay error, gris si está correcto)
+    comentario_texto = row['Comentario']
+    if "⚠️" in comentario_texto:
+        style_com = 'style="color: #C8102E; font-weight: bold; font-size: 11px; text-align: left;"'
+    else:
+        style_com = 'style="color: #5A5A59; font-size: 11px; text-align: left;"'
+        
+    html_table += f'<td {style_com}>{comentario_texto}</td>'
         
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
@@ -362,7 +395,6 @@ plantilla_base = f'''
             </div>
         </div>
         
-        <!-- BARRA DE FILTROS ACTUALIZADA (FLOTA + GRÁFICAS) -->
         <div class="filter-bar" id="filterBar">
             <div class="filter-group">
                 <label for="flotaFilter" class="filter-label">🏢 Flota:</label>
