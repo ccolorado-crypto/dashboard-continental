@@ -214,9 +214,11 @@ for idx, row in dashboard_data.iterrows():
     
     flota_escaped = str(row["Flota"]).replace('"', '&quot;')
     maquina_str = str(row["Máquina"]).replace("'", "\\'")
+    # NUEVO: Agregamos data-maquina para hacer el filtrado por texto más eficiente
+    maquina_escaped = str(row["Máquina"]).replace('"', '&quot;').lower()
     
-    # Se añade la función onclick a la fila para abrir el Modal
-    html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}" data-flota="{flota_escaped}" onclick="abrirModal(\'{maquina_str}\')">'
+    # Se añade la función onclick a la fila para abrir el Modal y data-maquina
+    html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}" data-flota="{flota_escaped}" data-maquina="{maquina_escaped}" onclick="abrirModal(\'{maquina_str}\')">'
     html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
     html_table += f'<td style="font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{flota_escaped}">{row["Flota"]}</td>'
@@ -319,12 +321,17 @@ plantilla_base = f'''
         .chart-container {{ position: relative; width: 100%; height: 260px; flex-grow: 1; }}
         .chart-info-text {{ font-size: 11px; color: var(--artimo-grey); background-color: var(--artimo-light); padding: 10px; margin-top: 12px; border-radius: 8px; border-left: 3px solid var(--artimo-red); line-height: 1.5; }}
         
-        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: var(--blanco); border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-dark); flex-wrap: wrap; gap: 10px; }}
+        .filter-bar {{ width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background: var(--blanco); border-radius: 12px; border: 1px solid var(--border-color); box-sizing: border-box; border-left: 4px solid var(--artimo-dark); flex-wrap: wrap; gap: 15px; }}
         .filter-group {{ display: flex; align-items: center; gap: 10px; }}
         .filter-label {{ font-weight: 700; font-size: 12px; color: var(--artimo-dark); text-transform: uppercase; }}
-        .filter-select {{ padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-family: var(--font-family); font-size: 12px; outline: none; cursor: pointer; max-width: 300px; background: var(--blanco); color: var(--artimo-dark); }}
+        .filter-select, .filter-input {{ padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-family: var(--font-family); font-size: 12px; outline: none; background: var(--blanco); color: var(--artimo-dark); }}
+        .filter-select {{ cursor: pointer; max-width: 250px; }}
+        .filter-input {{ max-width: 200px; }}
         .filter-msg {{ font-weight: 600; font-size: 13px; background: var(--alert-bg); padding: 6px 12px; border-radius: 6px; color: var(--artimo-red); }}
         
+        /* Contenedor flexible para los filtros (nuevo) */
+        .filters-container {{ display: flex; gap: 15px; flex-wrap: wrap; }}
+
         .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }}
         table.tabla-maquinas {{ width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }}
         th, td {{ padding: 12px 14px; text-align: center; border-bottom: 1px solid var(--border-color); }}
@@ -409,12 +416,18 @@ plantilla_base = f'''
         </div>
         
         <div class="filter-bar" id="filterBar">
-            <div class="filter-group">
-                <label for="flotaFilter" class="filter-label">🏢 Flota:</label>
-                <select id="flotaFilter" class="filter-select" onchange="applyFilters()">
-                    <option value="ALL">Mostrar Todas las Flotas</option>
-                    {opciones_flota}
-                </select>
+            <div class="filters-container">
+                <div class="filter-group">
+                    <label for="flotaFilter" class="filter-label">🏢 Flota:</label>
+                    <select id="flotaFilter" class="filter-select" onchange="applyFilters()">
+                        <option value="ALL">Mostrar Todas las Flotas</option>
+                        {opciones_flota}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="maquinaFilter" class="filter-label">🚜 Máquina:</label>
+                    <input type="text" id="maquinaFilter" class="filter-input" placeholder="Ej. MAQ-001..." onkeyup="applyFilters()">
+                </div>
             </div>
             <div class="filter-msg" id="filterMessage" style="display: none;"></div>
             <button class="btn-action" onclick="resetFilters()" id="btnReset" style="display: none; background: var(--artimo-dark); color: white;">Limpiar Filtros</button>
@@ -510,13 +523,21 @@ plantilla_base = f'''
 
         function applyFilters() {{
             const flotaValue = document.getElementById('flotaFilter').value;
+            // NUEVO: Obtenemos lo que se escriba en el input y lo pasamos a minúsculas
+            const maquinaValue = document.getElementById('maquinaFilter').value.trim().toLowerCase();
             const rows = document.querySelectorAll('.data-row');
             let count = 0;
             
             rows.forEach(row => {{
                 let show = true;
+                
+                // Filtro por select de flota
                 if (flotaValue !== 'ALL' && row.getAttribute('data-flota') !== flotaValue) show = false;
                 
+                // NUEVO: Filtro de texto por máquina (búsqueda parcial)
+                if (maquinaValue && !row.getAttribute('data-maquina').includes(maquinaValue)) show = false;
+                
+                // Filtro por clicks en gráficas
                 if (currentChartFilter) {{
                     let rVal = '';
                     if (currentChartFilter.category === 'trans') rVal = row.getAttribute('data-trans');
@@ -532,8 +553,10 @@ plantilla_base = f'''
             const msgEl = document.getElementById('filterMessage');
             const resetBtn = document.getElementById('btnReset');
             let activeFilters = [];
+            
             if (currentChartFilter) activeFilters.push(`Gráfica: ${{currentChartFilter.label}}`);
-            if (flotaValue !== 'ALL') activeFilters.push(`Solo esta Flota`);
+            if (flotaValue !== 'ALL') activeFilters.push(`Flota`);
+            if (maquinaValue !== '') activeFilters.push(`Búsqueda: "${{maquinaValue}}"`);
             
             if (activeFilters.length > 0) {{
                 msgEl.style.display = 'inline-block'; resetBtn.style.display = 'inline-block';
@@ -545,6 +568,7 @@ plantilla_base = f'''
 
         function resetFilters() {{
             document.getElementById('flotaFilter').value = 'ALL';
+            document.getElementById('maquinaFilter').value = ''; // Limpiar el input de máquina
             currentChartFilter = null;
             applyFilters();
         }}
@@ -589,4 +613,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard avanzado (Dark Mode + IA Summary) generado con éxito!")
+print(f"¡Dashboard avanzado (Dark Mode + IA Summary + Búsqueda por Máquina) generado con éxito!")
