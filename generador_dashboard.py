@@ -42,12 +42,12 @@ if not archivos_datos:
     print("Error: No se encontró NINGÚN archivo de datos en la carpeta data.")
     exit(1)
 
-ruta_archivo = archivos_datos[0]
+ruta_archivo = sorted(archivos_datos)[0]
 if ruta_archivo.lower().endswith('.csv'):
     df = pd.read_csv(ruta_archivo, on_bad_lines='skip', engine='python')
 else:
     import warnings
-    warnings.filterwarnings('ignore') # Ignora alertas visuales de openpyxl
+    warnings.filterwarnings('ignore')
     df = pd.read_excel(ruta_archivo)
 
 # Limpiar fila de cabecera duplicada si existe
@@ -129,20 +129,31 @@ for i in range(1, 13):
             total_cam_ok += (dashboard_data[cam_name] == 'Normal').sum()
             total_cam_falla += (dashboard_data[cam_name] == 'Falla').sum()
 
+# --- GENERACIÓN DE COMENTARIOS INTELIGENTES (CÁMARAS CON FALLA + CANALES NO PERMITIDOS) ---
 canales_no_permitidos = [i for i in range(1, 13) if i not in nombres_camaras_personalizados]
 
 def generar_comentario(row):
+    observaciones = []
+    
+    # 1. Fallas en cámaras oficiales
+    cams_con_falla = [cam_name for _, _, cam_name in camaras_encontradas if row.get(cam_name) == 'Falla']
+    if cams_con_falla:
+        observaciones.append(f"⚠️ Falla en cámara(s): {', '.join(cams_con_falla)}")
+    
+    # 2. Canales no permitidos habilitados
+    idx = row.name
     canales_activos_erroneos = []
     for i in canales_no_permitidos:
         col_hab = f'Cámara {i} habilitada'
-        if col_hab in df.columns and str(row.get(col_hab, '')).strip().lower() == 'abrir':
+        if col_hab in df.columns and str(df.loc[idx, col_hab]).strip().lower() == 'abrir':
             canales_activos_erroneos.append(f"CAM {i}")
     
     if canales_activos_erroneos:
-        return f"⚠️ Canales activos no permitidos: {', '.join(canales_activos_erroneos)}"
-    return "Sin observaciones"
+        observaciones.append(f"⚠️ Canales activos no permitidos: {', '.join(canales_activos_erroneos)}")
+    
+    return " | ".join(observaciones) if observaciones else "Sin observaciones"
 
-dashboard_data['Comentario'] = df.apply(generar_comentario, axis=1)
+dashboard_data['Comentario'] = dashboard_data.apply(generar_comentario, axis=1)
 alertas_hardware = disco_falla_cnt + disco_nodet_cnt + total_cam_falla
 
 def evaluar_gravedad(row):
@@ -156,7 +167,15 @@ def evaluar_gravedad(row):
 dashboard_data['Gravedad'] = dashboard_data.apply(evaluar_gravedad, axis=1)
 dashboard_data = dashboard_data.sort_values(by='Días Offline', ascending=False)
 
-# --- CÁLCULO DE HEALTH SCORE Y RESUMEN EJECUTIVO (NUEVO) ---
+# Métricas de cámaras para la gráfica (equipos únicos)
+cols_cams = [c[2] for c in camaras_encontradas]
+if cols_cams:
+    equipos_con_cam_falla = int((dashboard_data[cols_cams] == 'Falla').any(axis=1).sum())
+else:
+    equipos_con_cam_falla = 0
+equipos_cam_ok = max(0, total_maquinas - equipos_con_cam_falla)
+
+# --- CÁLCULO DE HEALTH SCORE Y RESUMEN EJECUTIVO ---
 equipos_excelentes = int((dashboard_data['Gravedad'] == '🟢 Excelente').sum())
 health_score = round((equipos_excelentes / total_maquinas) * 100) if total_maquinas > 0 else 100
 
@@ -167,9 +186,9 @@ elif health_score >= 70:
 else:
     hs_color, hs_icono = "#C8102E", "🚨"
 
-equipos_mal_configurados = int((dashboard_data['Comentario'] != 'Sin observaciones').sum())
+equipos_mal_configurados = int(dashboard_data['Comentario'].str.contains('no permitidos', case=False, na=False).sum())
 
-# Generación inteligente del texto
+# Generación del texto
 resumen_insights = f"El índice de salud operativo de la flota es del <strong>{health_score}%</strong>. "
 if equipos_criticos_antiguedad > 0:
     resumen_insights += f"Se registran <strong style='color: var(--artimo-red);'>{equipos_criticos_antiguedad}</strong> equipos en estado crítico de transmisión (>15 días). "
@@ -214,19 +233,15 @@ for idx, row in dashboard_data.iterrows():
     
     flota_escaped = str(row["Flota"]).replace('"', '&quot;')
     maquina_str = str(row["Máquina"]).replace("'", "\\'")
-    # NUEVO: Agregamos data-maquina para hacer el filtrado por texto más eficiente
     maquina_escaped = str(row["Máquina"]).replace('"', '&quot;').lower()
     
-    # Se añade la función onclick a la fila para abrir el Modal y data-maquina
     html_table += f'<tr class="data-row" data-trans="{t_stat}" data-disk="{d_stat}" data-cam="{c_stat}" data-flota="{flota_escaped}" data-maquina="{maquina_escaped}" onclick="abrirModal(\'{maquina_str}\')">'
     html_table += f'<td>{style_gravedad(row["Gravedad"])}</td>'
     html_table += f'<td>{row["Máquina"]}</td>'
     html_table += f'<td style="font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{flota_escaped}">{row["Flota"]}</td>'
     
-    # Evitamos que el fondo rojo fije el color en modo oscuro, usamos una clase
     alerta_class = "cell-alert" if row["Días Offline"] >= 5 else ""
     html_table += f'<td class="{alerta_class}" style="font-weight: 700;">{row["Días Offline"]}</td>'
-    
     html_table += f'<td>{row["Última transmisión"]}</td>'
     html_table += f'<td>{style_disk_status(row["Status_Disco"])}</td>'
     
@@ -243,7 +258,7 @@ for idx, row in dashboard_data.iterrows():
     html_table += '</tr>\n'
 html_table += '</tbody>\n</table>'
 
-# 3. PLANTILLA HTML CON NUEVAS VARIABLES CSS PARA MODO OSCURO
+# 3. PLANTILLA HTML
 plantilla_base = f'''
 <!DOCTYPE html>
 <html lang="es">
@@ -256,14 +271,13 @@ plantilla_base = f'''
             --artimo-red: #C8102E; 
             --artimo-dark: #333333; 
             --artimo-grey: #5A5A59; 
-            --artimo-light: #F4F4F4;
+            --artimo-light: #F4F4F4; 
             --blanco: #FFFFFF; 
-            --border-color: #E5E7EB;
-            --alert-bg: #FFF5F5;
-            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --border-color: #E5E7EB; 
+            --alert-bg: #FFF5F5; 
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
         }}
         
-        /* VARIABLES PARA MODO OSCURO */
         body.dark-mode {{
             --artimo-dark: #F3F4F6;
             --artimo-light: #111827;
@@ -279,14 +293,14 @@ plantilla_base = f'''
             height: 56px; 
             background-color: var(--blanco); 
             border-bottom: 1px solid var(--border-color); 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
-            padding: 0 24px;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
+            padding: 0 24px; 
+            position: sticky; 
+            top: 0; 
+            z-index: 1000; 
         }}
         .brand-container {{ display: flex; align-items: center; gap: 12px; }}
         .brand-logo {{ max-height: 36px; object-fit: contain; }}
@@ -294,7 +308,7 @@ plantilla_base = f'''
         
         .navbar-actions {{ display: flex; align-items: center; gap: 10px; }}
         .btn-action {{ 
-            background-color: var(--blanco); color: var(--artimo-dark); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease;
+            background-color: var(--blanco); color: var(--artimo-dark); border: 1px solid var(--border-color); padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s ease; 
         }}
         .btn-action:hover {{ background-color: var(--artimo-light); }}
         .btn-action.primary {{ background-color: var(--artimo-red); color: #FFF; border-color: var(--artimo-red); }}
@@ -303,7 +317,6 @@ plantilla_base = f'''
         
         .dashboard-container {{ display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 24px; max-width: 1400px; margin: 0 auto; }}
         
-        /* BANNER EJECUTIVO */
         .executive-summary {{ width: 100%; background-color: var(--blanco); border-left: 4px solid var(--artimo-red); padding: 14px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); font-size: 14px; color: var(--artimo-dark); display: flex; align-items: center; gap: 12px; box-sizing: border-box; border-right: 1px solid var(--border-color); border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }}
         
         .kpi-section {{ display: flex; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 16px; }}
@@ -311,7 +324,6 @@ plantilla_base = f'''
         .kpi-card h3 {{ margin: 0 0 8px 0; color: var(--artimo-grey); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }}
         .kpi-card .number {{ margin: 0; font-size: 38px; font-weight: 800; color: var(--artimo-dark); }}
         
-        /* TARJETA DE SALUD DESTACADA */
         .kpi-card.health-score {{ background: {hs_color}15; border: 2px solid {hs_color}; }}
         .kpi-card.health-score .number {{ color: {hs_color}; }}
 
@@ -329,7 +341,6 @@ plantilla_base = f'''
         .filter-input {{ max-width: 200px; }}
         .filter-msg {{ font-weight: 600; font-size: 13px; background: var(--alert-bg); padding: 6px 12px; border-radius: 6px; color: var(--artimo-red); }}
         
-        /* Contenedor flexible para los filtros (nuevo) */
         .filters-container {{ display: flex; gap: 15px; flex-wrap: wrap; }}
 
         .table-card {{ width: 100%; padding: 0; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }}
@@ -348,7 +359,6 @@ plantilla_base = f'''
         .disk-status.Falla {{ background-color: #FDEDEC; color: #C8102E; }}
         .disk-status.SinDisco {{ background-color: var(--artimo-light); color: var(--artimo-grey); }}
         
-        /* DISEÑO DEL MODAL */
         .modal-overlay {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(3px); }}
         .modal-content {{ background: var(--blanco); padding: 24px; border-radius: 12px; max-width: 600px; width: 90%; color: var(--artimo-dark); border: 1px solid var(--border-color); box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 85vh; overflow-y: auto; }}
         .modal-header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 20px; }}
@@ -449,7 +459,7 @@ plantilla_base = f'''
                 <button class="modal-close" onclick="cerrarModal()">&times;</button>
             </div>
             <div class="modal-grid" id="modalGrid">
-                </div>
+            </div>
         </div>
     </div>
     
@@ -457,7 +467,6 @@ plantilla_base = f'''
         const rawJsonData = {json_raw_data};
         let chartsInstanced = [];
 
-        // --- FUNCIONALIDAD MODO OSCURO ---
         function toggleDarkMode() {{
             const body = document.body;
             body.classList.toggle('dark-mode');
@@ -465,12 +474,10 @@ plantilla_base = f'''
             
             document.getElementById('btnDarkMode').innerHTML = isDark ? '☀️ Modo Claro' : '🌙 Modo Oscuro';
             
-            // Actualizar color de fuente en Chart.js para que se lea en fondo oscuro
             Chart.defaults.color = isDark ? '#9CA3AF' : '#5A5A59';
             chartsInstanced.forEach(chart => chart.update());
         }}
 
-        // --- FUNCIONALIDAD MODAL (VISTA DE DETALLE) ---
         function abrirModal(maquinaId) {{
             const dataRow = rawJsonData.find(d => String(d['Máquina']) === String(maquinaId));
             if(!dataRow) return;
@@ -496,7 +503,6 @@ plantilla_base = f'''
         function cerrarModal() {{ document.getElementById('detalleModal').style.display = 'none'; }}
         function cerrarModalFuera(event) {{ if(event.target.id === 'detalleModal') cerrarModal(); }}
 
-        // --- FUNCIONES CLÁSICAS (EXPORTAR, FILTROS, GRÁFICAS) ---
         function exportCSV() {{
             const headers = Object.keys(rawJsonData[0]);
             const csvRows = [headers.join(',')];
@@ -523,7 +529,6 @@ plantilla_base = f'''
 
         function applyFilters() {{
             const flotaValue = document.getElementById('flotaFilter').value;
-            // NUEVO: Obtenemos lo que se escriba en el input y lo pasamos a minúsculas
             const maquinaValue = document.getElementById('maquinaFilter').value.trim().toLowerCase();
             const rows = document.querySelectorAll('.data-row');
             let count = 0;
@@ -531,13 +536,9 @@ plantilla_base = f'''
             rows.forEach(row => {{
                 let show = true;
                 
-                // Filtro por select de flota
                 if (flotaValue !== 'ALL' && row.getAttribute('data-flota') !== flotaValue) show = false;
-                
-                // NUEVO: Filtro de texto por máquina (búsqueda parcial)
                 if (maquinaValue && !row.getAttribute('data-maquina').includes(maquinaValue)) show = false;
                 
-                // Filtro por clicks en gráficas
                 if (currentChartFilter) {{
                     let rVal = '';
                     if (currentChartFilter.category === 'trans') rVal = row.getAttribute('data-trans');
@@ -568,7 +569,7 @@ plantilla_base = f'''
 
         function resetFilters() {{
             document.getElementById('flotaFilter').value = 'ALL';
-            document.getElementById('maquinaFilter').value = ''; // Limpiar el input de máquina
+            document.getElementById('maquinaFilter').value = '';
             currentChartFilter = null;
             applyFilters();
         }}
@@ -584,7 +585,6 @@ plantilla_base = f'''
             filterTable(category, value, labelFull);
         }};
 
-        // Inicialización de Gráficas y guardado en arreglo para Modo Oscuro
         Chart.defaults.font.family = 'var(--font-family)';
         
         chartsInstanced.push(new Chart(document.getElementById('graficaTransmision').getContext('2d'), {{ 
@@ -601,7 +601,7 @@ plantilla_base = f'''
         
         chartsInstanced.push(new Chart(document.getElementById('graficaCamaras').getContext('2d'), {{ 
             type: 'pie', 
-            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{(dashboard_data['Status_Transmision'] != 'N/A').sum() - total_cam_falla}, {total_cam_falla}], backgroundColor: ['#2A9D8F', '#E9C46A'], borderWidth: 0 }}] }}, 
+            data: {{ labels: ['Equipos 100% OK', 'Equipos con Cámara Dañada'], datasets: [{{ label: 'Unidad', data: [{equipos_cam_ok}, {equipos_con_cam_falla}], backgroundColor: ['#2A9D8F', '#E9C46A'], borderWidth: 0 }}] }}, 
             options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ position: 'bottom' }}, title: titleOptions('Salud de Cámaras') }}, onClick: onChartClick('cam') }} 
         }}));
     </script>
@@ -613,4 +613,4 @@ ruta_guardado = os.path.join(carpeta_public, 'index.html')
 with open(ruta_guardado, 'w', encoding='utf-8') as f:
     f.write(plantilla_base)
 
-print(f"¡Dashboard avanzado (Dark Mode + IA Summary + Búsqueda por Máquina) generado con éxito!")
+print("¡Dashboard avanzado generado con éxito!")
